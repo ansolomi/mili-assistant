@@ -48,10 +48,10 @@ for (const s of ['L', 'R']) {
   const elbow = bindPos(`DEF-forearm.${s}`), hand = bindPos(`DEF-hand.${s}`);
   const axis = hand.clone().sub(elbow), len = axis.length(), dir = axis.clone().normalize();
   const tail = hand.clone().addScaledVector(dir, 0.05);
-  const weightOf = (v) => { // far end of the sleeve, near the forearm axis, ramps up toward the cuff
+  const weightOf = (v) => { // the billow of the sleeve peaks mid-forearm and falls to zero at the cuff, so the opening stays on the wrist
     const r = v.clone().sub(elbow), t = r.dot(dir) / len;
     if (r.addScaledVector(dir, -r.dot(dir)).length() > 0.13) return 0;
-    return 0.9 * smooth(0.35, 1.05, t);
+    return 0.6 * smooth(0.2, 0.55, t) * (1 - smooth(0.7, 0.95, t));
   };
   sleeves.push(addBone(`cloth-sleeve.${s}`, `DEF-forearm.${s}`, elbow, tail, weightOf, { name: `sleeve${s}` }));
 }
