@@ -47,13 +47,19 @@ http.createServer(async (req, res) => {
     try { ({ task } = JSON.parse((await body(req)).toString() || '{}')); } catch { return json(res, { error: 'invalid JSON' }, 400); }
     return task ? json(res, claude.start(String(task))) : json(res, { error: 'task required' }, 400);
   }
-  if (p === '/api/image' && req.method === 'POST') { // pasted picture -> vault, so Claude jobs and Jarvis can Read it
-    const ext = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' }[req.headers['content-type']];
+  if ((p === '/api/upload' || p === '/api/image') && req.method === 'POST') { // attachment -> vault, so Claude jobs and Jarvis can Read it
+    const images = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
+    let name = '';
+    try { name = decodeURIComponent(String(req.headers['x-filename'] ?? '')); } catch { /* bad header: fall back to the content type */ }
+    const named = path.extname(name).slice(1).toLowerCase();
+    const ext = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'pdf', 'docx', 'txt', 'md', 'csv', 'json'].includes(named) ? named : images[req.headers['content-type']];
     const buf = await body(req);
-    if (!ext || !buf.length || buf.length > 15_000_000) return json(res, { error: 'png, jpeg, webp or gif up to 15 MB' }, 400);
-    const dir = path.join(vault, 'Inbox', 'images');
+    if (!ext || !buf.length || buf.length > 15_000_000) return json(res, { error: 'png, jpeg, webp, gif, pdf, docx, txt, md, csv or json up to 15 MB' }, 400);
+    const dir = path.join(vault, 'Inbox', ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext) ? 'images' : 'files');
     fs.mkdirSync(dir, { recursive: true });
-    const file = path.join(dir, `${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.${ext}`);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const stem = path.basename(name, path.extname(name)).replace(/[^\w.-]+/g, '_').slice(0, 40); // no spaces, so the path survives in a message
+    const file = path.join(dir, `${stamp}${stem ? '-' + stem : ''}.${ext}`);
     fs.writeFileSync(file, buf);
     return json(res, { path: file });
   }

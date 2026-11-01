@@ -21,7 +21,7 @@
     .msg.info { align-self: center; background: none; color: var(--dim); font-size: 12px; padding: 0; }
     #controls { padding: 12px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
     #row { display: flex; gap: 8px; }
-    input[type=text] { flex: 1; background: #0f131b; border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 10px 12px; font: inherit; }
+    input[type=text], textarea { flex: 1; background: #0f131b; border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 10px 12px; font: inherit; }
     button { background: #232c3d; border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 9px 12px; font: inherit; cursor: pointer; }
     button:hover { background: #2b364b; } button.on { background: #7f1d1d; border-color: #b91c1c; } button.primary { background: var(--accent); color: #07101f; border-color: var(--accent); font-weight: 600; }
     #btns { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -34,7 +34,13 @@
     #ovMic.on { background: #ff4d6d; animation: ovPulse 1s infinite; }
     @keyframes ovPulse { 50% { box-shadow: 0 0 0 8px rgba(255,77,109,0.3); } }
     body.overlay #ovMic { display: block; }
-    #ovChat { display: none; position: fixed; top: 6px; left: 20px; right: 20px; z-index: 9; }
+    #ovPane { display: none; position: fixed; top: 6px; left: 12px; right: 12px; z-index: 9; flex-direction: column; gap: 6px; padding: 10px; border-radius: 14px; background: rgba(24,28,40,0.92); border: 1px solid var(--line); box-shadow: 0 6px 24px rgba(0,0,0,0.45); }
+    #ovPane.drop { border-color: var(--accent); background: rgba(34,48,76,0.95); }
+    #ovChat { width: 100%; box-sizing: border-box; min-height: 110px; max-height: 40vh; resize: vertical; font: inherit; font-size: 15px; line-height: 1.4; padding: 8px 10px; }
+    #ovFiles { display: flex; flex-wrap: wrap; gap: 6px; } #ovFiles:empty { display: none; }
+    #ovFiles span { background: #232c3d; border: 1px solid var(--line); border-radius: 999px; padding: 2px 6px 2px 10px; font-size: 12px; color: var(--text); }
+    #ovFiles b { cursor: pointer; margin-left: 6px; opacity: 0.7; }
+    #ovBar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #9aa7bd; } #ovBar i { flex: 1; font-style: normal; }
     body.clean aside, body.clean .lil-gui, body.clean #badge, body.clean #audioHint { display: none; }
   </style>
 </head>
@@ -54,7 +60,12 @@
     </aside>
   </div>
   <button id="ovMic" title="Talk (Ctrl+Alt+M)"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V22h2v-3.08A7 7 0 0 0 19 12z"/></svg></button>
-  <input id="ovChat" type="text" placeholder="Say something..." autocomplete="off" />
+  <div id="ovPane">
+    <div id="ovFiles"></div>
+    <textarea id="ovChat" placeholder="Say something... (Enter sends, Shift+Enter adds a line). Drop or paste files to give them to Jarvis." autocomplete="off"></textarea>
+    <div id="ovBar"><button id="ovAttach" title="Attach files for Jarvis">Attach</button><i>images, pdf, docx, txt, md, csv, json</i><button id="ovSend" class="primary">Send</button></div>
+    <input id="ovFile" type="file" multiple hidden />
+  </div>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

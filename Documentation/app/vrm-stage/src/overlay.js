@@ -33,17 +33,55 @@ export async function startOverlay({ stage, bridge, say }) {
   ov.setPos(st.x, st.y);
 
   const box = document.getElementById('ovChat');
+  const pane = document.getElementById('ovPane'), chips = document.getElementById('ovFiles'), picker = document.getElementById('ovFile');
+  let files = []; // paths of attachments saved in the vault, waiting for Send
+  const drawChips = () => {
+    chips.replaceChildren(...files.map((f, i) => {
+      const s = document.createElement('span'), x = document.createElement('b');
+      s.textContent = f.split(/[\\/]/).pop(); x.textContent = '×'; x.onclick = () => { files.splice(i, 1); drawChips(); };
+      s.append(x); return s;
+    }));
+  };
   const setChat = (on) => {
     st.chat = on; st.lastActive = performance.now();
-    box.style.display = on ? 'block' : 'none';
+    pane.style.display = on ? 'flex' : 'none';
     if (on) { ov.focus(); setTimeout(() => box.focus(), 150); } // the window takes focus asynchronously
-    else box.value = '';
+    else { box.value = ''; files = []; drawChips(); }
     ov.ignore(!(on || st.over));
   };
+  // Attachments go to Jarvis: with files and no trigger word the message becomes "jarvis, /work <text> <paths>".
+  const compose = () => {
+    const text = box.value.trim();
+    if (!files.length) return text;
+    if (TYPED.test(text)) return `${text} Attached files: ${files.map((f) => `"${f}"`).join(' ')}`; // an explicit claude, task keeps its route
+    const m = JARVIS.exec(text);
+    const task = (m ? m[1] : text) || 'Look at the attached files and tell me what they are.';
+    return `jarvis, ${/^\//.test(task) ? task : '/work ' + task} Attached files: ${files.map((f) => `"${f}"`).join(' ')}`;
+  };
+  const send = () => {
+    if (!box.value.trim() && !files.length) return;
+    const shown = box.value.trim() || '(attachments)';
+    const msg = compose();
+    say(files.length ? `${shown} [${files.length} file${files.length > 1 ? 's' : ''}]` : shown, 'me'); bridge.sendText(msg); setChat(false);
+  };
   box.onkeydown = (e) => {
-    if (e.key === 'Enter' && box.value.trim()) { say(box.value.trim(), 'me'); bridge.sendText(box.value.trim()); setChat(false); }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
     if (e.key === 'Escape') setChat(false);
   };
+  document.getElementById('ovSend').onclick = send;
+  document.getElementById('ovAttach').onclick = () => picker.click();
+  const attach = async (list) => {
+    for (const f of list) {
+      const r = await fetch('/api/upload', { method: 'POST', headers: { 'content-type': f.type || 'application/octet-stream', 'x-filename': encodeURIComponent(f.name || '') }, body: f }).then((x) => x.json()).catch(() => ({}));
+      if (r.path) files.push(r.path); else say(`${f.name || 'File'} not saved: ${r.error ?? 'upload failed'}`, 'info');
+    }
+    drawChips(); box.focus();
+  };
+  picker.onchange = () => { attach([...picker.files]); picker.value = ''; };
+  box.addEventListener('paste', (e) => { const l = [...(e.clipboardData?.files ?? [])]; if (l.length) { e.preventDefault(); attach(l); } });
+  pane.addEventListener('dragover', (e) => { e.preventDefault(); pane.classList.add('drop'); });
+  pane.addEventListener('dragleave', () => pane.classList.remove('drop'));
+  pane.addEventListener('drop', (e) => { e.preventDefault(); pane.classList.remove('drop'); attach([...e.dataTransfer.files]); });
 
   // the window is click-through except over her opaque pixels
   window.addEventListener('pointermove', (e) => {
@@ -131,14 +169,6 @@ export async function startOverlay({ stage, bridge, say }) {
     sendText(`[Jarvis answered] Tell me in one or two short Japanese sentences: ${r.reply.slice(0, 300)}`);
   };
   bridge.sendText = (t) => { const c = CLOUD.exec(t), j = JARVIS.exec(t), m = TYPED.exec(t); if (c) runCloud(c[1]); else if (j) runJarvis(j[1]); else if (m) runClaude(m[1]); else sendText(t); };
-  // Paste a picture into the chat box: it is saved to the vault and its path is added to the text for claude, / jarvis, tasks.
-  box.addEventListener('paste', async (e) => {
-    const f = [...(e.clipboardData?.files ?? [])].find((x) => x.type.startsWith('image/'));
-    if (!f) return;
-    e.preventDefault();
-    const r = await fetch('/api/image', { method: 'POST', headers: { 'content-type': f.type }, body: f }).then((x) => x.json()).catch(() => ({}));
-    if (r.path) box.value += ` ${r.path} `; else say('Image not saved (png, jpeg, webp, gif up to 15 MB)', 'info');
-  });
   const onUserText = bridge.h.onUserText;
   bridge.h.onUserText = (t) => {
     onUserText?.(t);
