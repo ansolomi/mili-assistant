@@ -61,14 +61,23 @@ const chest = addCol(id('DEF-spine.003'), { capsule: { offset: [-0.06, 0, 0], ra
 const colliderGroups = [{ name: 'legs', colliders: [...legs, hips] }, { name: 'head', colliders: [head, chest] }];
 
 const joint = (node, stiffness, drag, grav, hit) => ({ node, hitRadius: hit, stiffness, gravityPower: grav, gravityDir: [0, -1, 0], dragForce: drag });
+// A chain's last joint is only the end marker the one before it points at, so every chain gets a small tail node:
+// without it the hem or hair tip would not move on its own.
+const addTail = (end) => {
+  const t = nodes[end].translation, len = Math.hypot(...t);
+  const [x, y, z] = len > 0.01 ? t.map((c) => (c / len) * Math.min(len, 0.08)) : [0, -0.05, 0];
+  nodes.push({ name: `${nodes[end].name}.tail`, translation: [x, y, z] });
+  (nodes[end].children ??= []).push(nodes.length - 1);
+  return nodes.length - 1;
+};
 const springs = [];
-cols.forEach((c, k) => springs.push({ name: `skirt${k}`, joints: c.map((n, j) => joint(n, [0.75, 0.55, 0.4][j], 0.35, 0, 0.025)), colliderGroups: [0] }));
+cols.forEach((c, k) => { const chain = [...c, addTail(c[2])]; springs.push({ name: `skirt${k}`, joints: chain.map((n, j) => joint(n, [0.75, 0.55, 0.4, 0.3][j], 0.35, 0, 0.025)), colliderGroups: [0] }); });
 // hair: every DEF-hair* bone directly under the head starts a chain along its first child
 const headNode = id('DEF-spine.006');
 for (const r of nodes[headNode].children.filter((c) => /^DEF-hair/.test(nodes[c].name))) {
   const chain = [r];
   while (nodes[chain[chain.length - 1]].children?.length) chain.push(nodes[chain[chain.length - 1]].children[0]);
-  if (chain.length < 2) continue;
+  chain.push(addTail(chain[chain.length - 1]));
   springs.push({ name: nodes[r].name, joints: chain.map((n, j) => joint(n, 0.9 - j * 0.05, 0.6, 0.05, 0.02)), colliderGroups: [1] });
 }
 json.extensionsUsed = [...new Set([...(json.extensionsUsed ?? []), 'VRMC_springBone'])];

@@ -29,7 +29,7 @@ Git: https://github.com/ansolomi/mili-vtuber (private, branch main). Everything 
 
 - Chat pane (v1.7): multi-line card with Attach, Close, Send and a model dropdown. Files dropped, pasted or attached are saved by `POST /api/upload` under `<vault>\Inbox\images|files` and sent as `mili, /work <text> Attached files: "<paths>"`. `start-vtuber.ps1` now starts the Jarvis bridge too (`JARVIS_DIR`, default D:\Projects\jarvis-code).
 - Models: `model` lists, `model, <name>` swaps (or use the dropdown); saved in stage-settings. VRM 0.x models (Arisa) use a mirrored bone frame, handled in `stage.js` (`baseYaw`, `flipBones`). `tools/kk2vrm.mjs` turns a GLB from a Koikatsu (KKBP) Rigify rig into a VRM; it was proven on one such model, which was then removed.
-- Taila physics: `tools/taila_rig.mjs` turns the 21 loose skirt bones into 7 chains of 3 and writes VRMC_springBone (skirt, all hair chains, thigh/hip/head colliders). Originals are in `data/source/taila/pre-physics/`. Sleeves and the cape have no bones of their own, so they are still rigid.
+- Taila physics: `tools/taila_rig.mjs` turns the 21 loose skirt bones into 7 chains of 3 and writes VRMC_springBone (skirt, all hair chains, thigh/hip/head colliders). Originals are in `data/source/taila/pre-physics/`. `tools/taila_cloth.mjs` (run after it) adds a sleeve bone per arm and four capelet hem bones, re-weights the cloth to them in the file, and adds their spring chains; every chain also gets a tail node so its last bone moves. Build: `taila_rig.mjs` then `taila_cloth.mjs` from `data/source/taila/pre-physics/<model>.vrm` into `data/models/`. Only checked on single frames and short wave/walk sequences; sleeve weights are by distance along the forearm and may need tuning.
 
 ## Run and rebuild
 - Start: `start-vtuber.ps1` (Ollama, VOICEVOX, brain, stage, exe). Stop: `stop-vtuber.ps1`.
@@ -58,5 +58,6 @@ Git: https://github.com/ansolomi/mili-vtuber (private, branch main). Everything 
 - Whether to keep the project private (animation licences).
 - Whether to move her brain to the 14B.
 - Whether the cloud room should ever get a reply channel.
+
 
 
