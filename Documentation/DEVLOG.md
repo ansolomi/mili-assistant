@@ -114,3 +114,6 @@ Overlay controls, a bigger box, voice input and a tray control panel.
 
 ## v1.4.2 skirt follows the legs
 Seated, the thigh still cut through the skirt hem because the skirt bones sit rigid under the pelvis. `Stage.skirtFollowLegs()` now runs after `vrm.update`: each skirt bone is rotated about its own origin by a distance-weighted share (gain 0.8, reach 0.16 m) of the nearby thigh's swing. Measured in the seated pose: skirt vertices closer than 0.048 m to a thigh axis went from 86 to 0, nearest vertex 0.013 m to 0.057 m (thigh radius about 0.057).
+
+## v1.4.3 headpat (stage page)
+On the non-overlay stage page, stroking the cursor back and forth over her head (about 350 px of travel inside a head-sized circle, 5 s cooldown) makes her go shy, wag her ears and show a short subtitle. See `headpat` in `src/main.js`. Not in the overlay: there a long hover would clash with click to chat and drag. Origin: job 3 of the Claude Code bridge asked which "room" was meant and stopped.

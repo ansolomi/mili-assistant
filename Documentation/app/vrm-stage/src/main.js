@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import GUI from 'lil-gui';
 import { Stage, EMOTIONS } from './stage.js';
 import { Bridge } from './bridge.js';
@@ -50,7 +51,29 @@ $('mic').onpointerdown = () => bridge.startMic().catch((e) => say(`Mic: ${e.mess
 window.addEventListener('pointerup', () => bridge.stopMic());
 window.addEventListener('keydown', (e) => { if (e.code === 'Space' && !e.repeat && !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName)) { e.preventDefault(); bridge.startMic().catch(() => {}); } });
 window.addEventListener('keyup', (e) => { if (e.code === 'Space' && !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName)) bridge.stopMic(); });
-if (!overlayMode) window.addEventListener('pointermove', (e) => { stage.pointer.x = (e.clientX / innerWidth) * 2 - 1; stage.pointer.y = -((e.clientY / innerHeight) * 2 - 1); });
+// Headpat (stage page only): stroking the cursor back and forth over her head makes her shy and wag her ears.
+const pat = { px: 0, py: 0, travel: 0, last: 0, cool: 0 };
+const overHead = (e) => {
+  const head = stage.bones.head?.getWorldPosition(new THREE.Vector3());
+  if (!head) return false;
+  const r = stage.out.getBoundingClientRect();
+  const toPx = (v) => { v = v.project(stage.camera); return [r.left + ((v.x + 1) / 2) * r.width, r.top + ((1 - v.y) / 2) * r.height]; };
+  const c = toPx(head.clone().add(new THREE.Vector3(0, 0.08, 0))), top = toPx(head.clone().add(new THREE.Vector3(0, 0.2, 0)));
+  return Math.hypot(e.clientX - c[0], e.clientY - c[1]) < Math.hypot(top[0] - c[0], top[1] - c[1]);
+};
+const headpat = (e) => {
+  const now = performance.now();
+  if (!overHead(e)) { if (now - pat.last > 800) pat.travel = 0; return; }
+  if (now - pat.last > 800) pat.travel = 0;
+  else pat.travel += Math.hypot(e.clientX - pat.px, e.clientY - pat.py);
+  pat.px = e.clientX; pat.py = e.clientY; pat.last = now;
+  if (pat.travel > 350 && now > pat.cool) {
+    pat.travel = 0; pat.cool = now + 5000;
+    stage.perform('shy', 3.6); setTimeout(() => stage.perform('earPerk', 1.6), 600);
+    stage.subtitle = 'えへへ…'; setTimeout(() => stage.subtitle === 'えへへ…' && (stage.subtitle = ''), 2500);
+  }
+};
+if (!overlayMode) window.addEventListener('pointermove', (e) => { stage.pointer.x = (e.clientX / innerWidth) * 2 - 1; stage.pointer.y = -((e.clientY / innerHeight) * 2 - 1); headpat(e); });
 
 // ---- model + background ---------------------------------------------------------
 const models = await api('/api/models');
