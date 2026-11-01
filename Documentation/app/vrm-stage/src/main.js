@@ -48,9 +48,9 @@ $('text').onkeydown = (e) => e.key === 'Enter' && sendText();
 $('stop').onclick = () => bridge.interrupt();
 $('mic').onpointerdown = () => bridge.startMic().catch((e) => say(`Mic: ${e.message}`, 'info'));
 window.addEventListener('pointerup', () => bridge.stopMic());
-window.addEventListener('keydown', (e) => { if (e.code === 'Space' && !e.repeat && document.activeElement !== $('text')) { e.preventDefault(); bridge.startMic().catch(() => {}); } });
-window.addEventListener('keyup', (e) => { if (e.code === 'Space') bridge.stopMic(); });
-window.addEventListener('pointermove', (e) => { stage.pointer.x = (e.clientX / innerWidth) * 2 - 1; stage.pointer.y = -((e.clientY / innerHeight) * 2 - 1); });
+window.addEventListener('keydown', (e) => { if (e.code === 'Space' && !e.repeat && !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName)) { e.preventDefault(); bridge.startMic().catch(() => {}); } });
+window.addEventListener('keyup', (e) => { if (e.code === 'Space' && !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName)) bridge.stopMic(); });
+if (!overlayMode) window.addEventListener('pointermove', (e) => { stage.pointer.x = (e.clientX / innerWidth) * 2 - 1; stage.pointer.y = -((e.clientY / innerHeight) * 2 - 1); });
 
 // ---- model + background ---------------------------------------------------------
 const models = await api('/api/models');

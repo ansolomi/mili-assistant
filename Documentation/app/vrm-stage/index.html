@@ -29,6 +29,11 @@
     html:has(body.overlay), body.overlay { background: transparent; }
     body.overlay aside, body.overlay .lil-gui, body.overlay #badge, body.overlay #audioHint { display: none; }
     body.overlay #app, body.overlay #stageWrap { height: 100vh; width: 100vw; aspect-ratio: auto; background: transparent; }
+    #ovMic { display: none; position: fixed; left: calc(50% + 110px); bottom: 330px; width: 38px; height: 38px; padding: 0; border-radius: 50%; border: 2px solid #fff; background: rgba(40,44,60,0.82); color: #fff; cursor: pointer; z-index: 8; }
+    #ovMic svg { width: 20px; height: 20px; fill: currentColor; display: block; margin: auto; }
+    #ovMic.on { background: #ff4d6d; animation: ovPulse 1s infinite; }
+    @keyframes ovPulse { 50% { box-shadow: 0 0 0 8px rgba(255,77,109,0.3); } }
+    body.overlay #ovMic { display: block; }
     #ovChat { display: none; position: fixed; top: 6px; left: 20px; right: 20px; z-index: 9; }
     body.clean aside, body.clean .lil-gui, body.clean #badge, body.clean #audioHint { display: none; }
   </style>
@@ -48,6 +53,7 @@
       </div>
     </aside>
   </div>
+  <button id="ovMic" title="Talk (Ctrl+Alt+M)"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V22h2v-3.08A7 7 0 0 0 19 12z"/></svg></button>
   <input id="ovChat" type="text" placeholder="Say something..." autocomplete="off" />
   <script type="module" src="/src/main.js"></script>
 </body>

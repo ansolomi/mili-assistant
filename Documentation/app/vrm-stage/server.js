@@ -39,7 +39,8 @@ http.createServer(async (req, res) => {
   if (p === '/api/learn') return json(res, req.method === 'POST' ? { started: await learner.run() } : learner.status());
   if (p === '/api/claude') {
     if (req.method !== 'POST') return json(res, claude.list());
-    const { task } = JSON.parse((await body(req)).toString() || '{}');
+    let task;
+    try { ({ task } = JSON.parse((await body(req)).toString() || '{}')); } catch { return json(res, { error: 'invalid JSON' }, 400); }
     return task ? json(res, claude.start(String(task))) : json(res, { error: 'task required' }, 400);
   }
   if (p === '/api/claude/cancel' && req.method === 'POST') return json(res, { cancelled: claude.cancel(Number(url.searchParams.get('id')) || 0) });

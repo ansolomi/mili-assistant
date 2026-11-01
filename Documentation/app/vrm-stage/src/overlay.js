@@ -45,8 +45,9 @@ export async function startOverlay({ stage, bridge, say }) {
   // the window is click-through except over her opaque pixels
   window.addEventListener('pointermove', (e) => {
     const r = stage.out.getBoundingClientRect();
-    const px = Math.floor(((e.clientX - r.left) / r.width) * stage.W), py = Math.floor(((e.clientY - r.top) / r.height) * stage.H);
-    const hit = px >= 0 && py >= 0 && px < stage.W && py < stage.H && stage.ctx.getImageData(px, py, 1, 1).data[3] > 20;
+    const cw = stage.out.width, ch = stage.out.height; // the canvas is drawn at a higher resolution than W x H when she is enlarged
+    const px = Math.floor(((e.clientX - r.left) / r.width) * cw), py = Math.floor(((e.clientY - r.top) / r.height) * ch);
+    const hit = !!e.target.closest?.('#ovMic') || (px >= 0 && py >= 0 && px < cw && py < ch && stage.ctx.getImageData(px, py, 1, 1).data[3] > 20);
     if (hit !== st.over) { st.over = hit; if (!st.chat && !st.drag) ov.ignore(!hit); }
     if (st.press && !st.drag && Math.hypot(e.screenX - st.press.x, e.screenY - st.press.y) > 6) pickUp();
   });
@@ -69,7 +70,7 @@ export async function startOverlay({ stage, bridge, say }) {
     st.x = b.x; st.y = b.y;
     if (st.y < floorY - 4) st.tween = { from: st.y, to: floorY, t: 0, dur: 0.5, ease: (t) => t * t, ok() {} }; // she drops back to the taskbar
   };
-  window.addEventListener('pointerdown', (e) => { if (st.over && !st.chat) st.press = { x: e.screenX, y: e.screenY }; });
+  window.addEventListener('pointerdown', (e) => { if (st.over && !st.chat && !e.target.closest?.('#ovMic')) st.press = { x: e.screenX, y: e.screenY }; });
   window.addEventListener('pointerup', () => { const click = st.press && !st.drag; st.press = null; if (click) setChat(true); else drop(); });
   window.addEventListener('blur', drop);
 
@@ -81,13 +82,18 @@ export async function startOverlay({ stage, bridge, say }) {
     floorY = area.y + area.height - b.height + 6;
     st.x = b.x; st.y = onFloor ? floorY : b.y;
     ov.report({ scale: sc });
+    await sleep(0.15); // the page's pixel ratio follows the zoom a moment later
+    stage.setResolution(clamp(window.devicePixelRatio, 1, 2.5));
     try { localStorage.setItem('mili.scale', String(sc)); } catch { /* private mode: not remembered */ }
   };
 
   // voice: Ctrl+Alt+M (or the panel) starts listening, the same again sends it
   const onMic = bridge.h.onMic;
-  bridge.h.onMic = (on) => { onMic?.(on); ov.report({ mic: on }); if (on) say('Listening... press Ctrl+Alt+M to send', 'info'); };
-  ov.on('mic-toggle', () => (bridge.mic ? bridge.stopMic() : bridge.startMic().catch((e) => say(`Mic: ${e.message}`, 'info'))));
+  const micBtn = document.getElementById('ovMic');
+  bridge.h.onMic = (on) => { onMic?.(on); ov.report({ mic: on }); micBtn.classList.toggle('on', on); if (on) say('Listening... press Ctrl+Alt+M or the mic to send', 'info'); };
+  const micToggle = () => (bridge.mic ? bridge.stopMic() : bridge.startMic().catch((e) => say(`Mic: ${e.message}`, 'info')));
+  micBtn.onclick = micToggle;
+  ov.on('mic-toggle', micToggle);
   // Claude Code: "claude, <task>" typed, or "hey claude, <task>" spoken, skips her LLM and starts a headless job.
   // Voice waits 4 s first (speech recognition can mishear) so Ctrl+Alt+C can still stop it.
   const TYPED = /^\s*(?:(?:hey|ok|okay)[\s,]+)?(?:claude|クロード)[\s,、:：.。-]+(.+)$/is;
@@ -129,6 +135,7 @@ export async function startOverlay({ stage, bridge, say }) {
   let saved = NaN;
   try { saved = Number(localStorage.getItem('mili.scale')); } catch { /* not remembered */ }
   if (saved && saved !== 1) { await setScale(saved); ov.setPos(st.x, st.y); }
+  else stage.setResolution(clamp(window.devicePixelRatio, 1, 2.5));
 
   ov.on('cursor', (p) => {
     st.cursor = p;

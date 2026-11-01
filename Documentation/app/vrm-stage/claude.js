@@ -10,12 +10,15 @@ const PROMPT = 'You are being driven by Mili, a desktop voice companion, from th
 function findExe() {
   const w = spawnSync('where', ['claude.exe'], { windowsHide: true, encoding: 'utf8' });
   if (w.status === 0) return w.stdout.split(/\r?\n/)[0];
-  const root = path.join(process.env.APPDATA ?? '', 'Claude', 'claude-code');
-  if (!fs.existsSync(root)) return null;
+  // the store version of the desktop app keeps its files under Packages\Claude_*\LocalCache, not in the real %APPDATA%
+  const pk = path.join(process.env.LOCALAPPDATA ?? '', 'Packages');
+  const roots = [path.join(process.env.APPDATA ?? '', 'Claude', 'claude-code')];
+  if (fs.existsSync(pk)) for (const d of fs.readdirSync(pk)) if (d.startsWith('Claude_')) roots.push(path.join(pk, d, 'LocalCache', 'Roaming', 'Claude', 'claude-code'));
   const num = (v) => v.split('.').map(Number);
-  const versions = fs.readdirSync(root).sort((a, b) => { const x = num(a), y = num(b); return (y[0] - x[0]) || (y[1] - x[1]) || (y[2] - x[2]); });
-  for (const v of versions) for (const h of fs.readdirSync(path.join(root, v))) { const f = path.join(root, v, h, 'claude.exe'); if (fs.existsSync(f)) return f; }
-  return null;
+  const found = [];
+  for (const root of roots.filter((r) => fs.existsSync(r))) for (const v of fs.readdirSync(root)) for (const h of fs.readdirSync(path.join(root, v))) { const f = path.join(root, v, h, 'claude.exe'); if (fs.existsSync(f)) found.push({ v: num(v), f }); }
+  found.sort((a, b) => (b.v[0] - a.v[0]) || (b.v[1] - a.v[1]) || (b.v[2] - a.v[2]));
+  return found[0]?.f ?? null;
 }
 
 export function makeClaude({ cwd, addDir, notes }) {

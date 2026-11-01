@@ -50,6 +50,7 @@ export class Stage {
     this.poseT = 3;
     this.cur = {};
     this.pointer = { x: 0, y: 0 };
+    this.look = { x: 0, y: 0 }; // smoothed pointer
     this.settings = {
       cameraCoverage: 1.2, cameraCenterOffset: -0.32, fov: 28,
       hairColor: '#b8bcc6', hairTint: true,
@@ -580,9 +581,12 @@ export class Stage {
     // head follows the pointer a little, nods while talking
     const nod = sp * 0.05 * Math.sin(t * 5.3);
     const tilt = Math.sin(t * 0.45) * 0.03 + (this.emotion === 'smirk' ? 0.07 : 0);
-    b.neck.rotation.set(nod * 0.5, this.pointer.x * 0.15, tilt * 0.5);
-    b.head.rotation.set(-this.pointer.y * 0.1 + nod, this.pointer.x * 0.2 + Math.sin(t * 0.33) * 0.03, tilt);
-    this.lookTarget.position.set(this.pointer.x * 0.6, (this.headY ?? 1.4) + this.pointer.y * 0.35, this.camera.position.z);
+    const k = 1 - Math.exp(-dt * 4); // the cursor arrives in steps (10 Hz in the overlay), so ease toward it
+    this.look.x += (this.pointer.x - this.look.x) * k;
+    this.look.y += (this.pointer.y - this.look.y) * k;
+    b.neck.rotation.set(nod * 0.5, this.look.x * 0.12, tilt * 0.5);
+    b.head.rotation.set(-this.look.y * 0.08 + nod, this.look.x * 0.16 + Math.sin(t * 0.33) * 0.03, tilt);
+    this.lookTarget.position.set(this.look.x * 0.6, (this.headY ?? 1.4) + this.look.y * 0.35, this.camera.position.z);
 
     // ear twitch
     if (this.ears) {
@@ -636,6 +640,15 @@ export class Stage {
     }
 
     vrm.update(dt);
+  }
+
+  // render at k times the logical size so a zoomed or high-DPI window stays sharp (W and H stay the drawing units)
+  setResolution(k) {
+    this.renderer.setPixelRatio(k);
+    this.renderer.setSize(this.W, this.H, false);
+    this.out.width = Math.round(this.W * k);
+    this.out.height = Math.round(this.H * k);
+    this.ctx.setTransform(k, 0, 0, k, 0, 0);
   }
 
   // ---- render + subtitles -------------------------------------------------
