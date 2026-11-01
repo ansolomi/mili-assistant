@@ -90,7 +90,7 @@ else app.whenReady().then(async () => {
   app.on('quit', () => fg.kill());
 
   // control panel: opens from the tray icon, closes when it loses focus
-  const ui = { scale: 1, walk: true, mic: false, hidden: false }; // mirrored from the stage page via 'report'
+  const ui = { scale: 1, walk: true, mic: false, hidden: false, claude: 0 }; // mirrored from the stage page via 'report'
   let panel = null;
   const quitAll = (stop) => { const r = findRoot(); if (stop && r) spawn('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(r, 'stop-vtuber.ps1')], { stdio: 'ignore', windowsHide: true }).unref(); app.quit(); };
   const toggleHidden = () => { ui.hidden = !ui.hidden; ui.hidden ? win.hide() : win.showInactive(); panel?.webContents.send('state', ui); };
@@ -99,11 +99,11 @@ else app.whenReady().then(async () => {
   ipcMain.handle('panel-state', () => ui);
   ipcMain.on('panel-cmd', (_e, name, arg) => {
     ({ scale: () => win.webContents.send('scale', arg), mic: micToggle, walk: () => win.webContents.send('toggle-walk'), hide: toggleHidden,
-      learn: () => win.webContents.send('learn'), quit: () => quitAll(false), stop: () => quitAll(true) })[name]?.();
+      learn: () => win.webContents.send('learn'), claude: claudeCancel, quit: () => quitAll(false), stop: () => quitAll(true) })[name]?.();
   });
   const togglePanel = () => {
     if (panel && !panel.isDestroyed()) { panel.close(); return; }
-    const a = screen.getPrimaryDisplay().workArea, pw = 290, ph = 480;
+    const a = screen.getPrimaryDisplay().workArea, pw = 290, ph = 530;
     panel = new BrowserWindow({ width: pw, height: ph, x: a.x + a.width - pw - 12, y: a.y + a.height - ph - 12, frame: false, resizable: false, skipTaskbar: true, alwaysOnTop: true, show: false,
       webPreferences: { preload: path.join(__dirname, 'panel-preload.js') } });
     panel.loadFile(path.join(__dirname, 'panel.html'));
@@ -112,6 +112,8 @@ else app.whenReady().then(async () => {
     panel.on('closed', () => { panel = null; });
   };
   globalShortcut.register('Control+Alt+M', micToggle); // talk without clicking her; press again to send
+  const claudeCancel = () => win.webContents.send('claude-cancel');
+  globalShortcut.register('Control+Alt+C', claudeCancel); // stop a pending or running Claude Code job
   app.on('will-quit', () => globalShortcut.unregisterAll());
 
   tray = new Tray(nativeImage.createFromDataURL(`data:image/png;base64,${iconPng}`));

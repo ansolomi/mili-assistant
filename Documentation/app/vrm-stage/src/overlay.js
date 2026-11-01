@@ -88,6 +88,42 @@ export async function startOverlay({ stage, bridge, say }) {
   const onMic = bridge.h.onMic;
   bridge.h.onMic = (on) => { onMic?.(on); ov.report({ mic: on }); if (on) say('Listening... press Ctrl+Alt+M to send', 'info'); };
   ov.on('mic-toggle', () => (bridge.mic ? bridge.stopMic() : bridge.startMic().catch((e) => say(`Mic: ${e.message}`, 'info'))));
+  // Claude Code: "claude, <task>" typed, or "hey claude, <task>" spoken, skips her LLM and starts a headless job.
+  // Voice waits 4 s first (speech recognition can mishear) so Ctrl+Alt+C can still stop it.
+  const TYPED = /^\s*(?:(?:hey|ok|okay)[\s,]+)?(?:claude|クロード)[\s,、:：.。-]+(.+)$/is;
+  const SPOKEN = /^\s*(?:(?:hey|ok|okay)[\s,]+(?:claude|cloud|clod|claud)|クロード)[\s,、:：.。-]+(.+)$/is;
+  let pending = null;
+  const cancelClaude = () => { if (pending) { clearTimeout(pending); pending = null; say('Cancelled', 'info'); } fetch('/api/claude/cancel', { method: 'POST' }); };
+  const runClaude = (task) => fetch('/api/claude', { method: 'POST', body: JSON.stringify({ task }) }).then(() => say(`Claude Code: ${task}`, 'info'));
+  const sendText = bridge.sendText.bind(bridge);
+  bridge.sendText = (t) => { const m = TYPED.exec(t); if (m) runClaude(m[1]); else sendText(t); };
+  const onUserText = bridge.h.onUserText;
+  bridge.h.onUserText = (t) => {
+    onUserText?.(t);
+    const m = SPOKEN.exec(t);
+    if (!m) return;
+    bridge.interrupt(); // the brain already started answering the transcript
+    say(`Sending to Claude Code in 4 s (Ctrl+Alt+C cancels): ${m[1]}`, 'info');
+    clearTimeout(pending);
+    pending = setTimeout(() => { pending = null; runClaude(m[1]); }, 4000);
+  };
+  ov.on('claude-cancel', cancelClaude);
+  const told = new Set();
+  let first = true;
+  setInterval(async () => {
+    const jobs = await fetch('/api/claude').then((x) => x.json()).catch(() => null);
+    if (!jobs) return;
+    ov.report({ claude: jobs.filter((j) => j.status === 'running').length });
+    for (const j of jobs) {
+      if (j.status === 'running' || told.has(j.id)) continue;
+      told.add(j.id);
+      if (first) continue; // finished before she started: nothing new to report
+      say(`Claude Code (${j.status}): ${j.result?.slice(0, 300)}`, 'info');
+      if (j.status === 'done') bridge.sendText(`[Claude Code finished "${j.task.slice(0, 80)}"] Tell me in one or two short Japanese sentences: ${j.mili ?? j.result.slice(0, 300)}`);
+      else if (j.status === 'error') bridge.sendText(`[Claude Code failed] Tell me briefly in Japanese that it failed. Reason: ${j.result.slice(0, 200)}`);
+    }
+    first = false;
+  }, 3000);
   window.addEventListener('wheel', (e) => { if (st.over && !st.drag) setScale(sc * (e.deltaY < 0 ? 1.06 : 1 / 1.06)); });
   ov.on('scale', setScale);
   let saved = NaN;

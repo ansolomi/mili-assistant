@@ -89,3 +89,10 @@ Overlay controls, a bigger box, voice input and a tray control panel.
 - Control panel: left click the tray icon (hidden icons area) for a panel with Size, Talk, Walk, Hide/Show, Explore files and Quit. Right click keeps the menu. Files: app/overlay/panel.html, panel-preload.js; state flows renderer -> main via `report`.
 - Fixed: the chat box close path had a comment swallowing `box.value = ''`.
 - Checked: wheel resize (360x640 to 285x507, feet fixed), drag and drop to the floor, hotkey mic on and off, panel rendered in a standalone Electron window. Not checked: clicking the real tray icon (it sits in the hidden-icons flyout), dragging while perched, very large sizes near screen edges.
+
+## v1.3: Claude Code bridge
+
+- `vrm-stage/claude.js` runs `claude -p` headless (stream-json, full permissions, vault as working folder, parent folder added) and saves each job to the vault; `server.js` exposes `GET/POST /api/claude` and `POST /api/claude/cancel`.
+- `overlay.js`: a typed `claude, <task>` or a spoken `hey claude, <task>` skips her LLM. Voice waits 4 s (Ctrl+Alt+C cancels). She reports finished jobs by feeding the `MILI:` line back to the brain.
+- Overlay: Ctrl+Alt+C hotkey and a panel button showing running jobs.
+- Untested end to end: the bundled Claude CLI was not signed in on this PC (`claude auth login` needed). The pipeline was checked up to the auth error.

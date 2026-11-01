@@ -18,7 +18,7 @@
   button.danger:hover { border-color: #ff6b6b; }
   .hint { color: var(--dim); font-size: 11.5px; margin: 2px 2px 10px; }
 </style>
-<h1>Mili <small>v1.2</small></h1>
+<h1>Mili <small>v1.3</small></h1>
 
 <div class="row"><label><span>Size</span><b id="sizeV">100%</b></label><input id="size" type="range" min="50" max="160" step="5" value="100"></div>
 
@@ -26,6 +26,7 @@
 <button id="walk">Walk around <span id="walkV">on</span></button>
 <button id="hide">Hide her <span id="hideV"></span></button>
 <button id="learn">Explore my files now</button>
+<button id="claude">Stop Claude Code jobs <span id="claudeV">Ctrl+Alt+C</span></button>
 <p class="hint">Drag her to move her. Scroll over her to resize. Click her to type.</p>
 <button id="quit" class="danger">Quit (keep services running)</button>
 <button id="stop" class="danger">Quit and stop all services</button>
@@ -36,6 +37,7 @@
     $('size').value = Math.round(s.scale * 100); $('sizeV').textContent = Math.round(s.scale * 100) + '%';
     $('walkV').textContent = s.walk ? 'on' : 'off'; $('walk').classList.toggle('on', s.walk);
     $('mic').classList.toggle('on', s.mic); $('micV').textContent = s.mic ? 'Listening... click to send' : 'Ctrl+Alt+M';
+    $('claudeV').textContent = s.claude ? s.claude + ' running' : 'Ctrl+Alt+C'; $('claude').classList.toggle('on', s.claude > 0);
     $('hide').firstChild.textContent = s.hidden ? 'Show her ' : 'Hide her ';
   };
   panel.state().then(render);
@@ -43,5 +45,5 @@
   let t = 0;
   $('size').oninput = (e) => { $('sizeV').textContent = e.target.value + '%'; if (Date.now() - t > 60) { t = Date.now(); panel.cmd('scale', e.target.value / 100); } };
   $('size').onchange = (e) => panel.cmd('scale', e.target.value / 100);
-  for (const k of ['mic', 'walk', 'hide', 'learn', 'quit', 'stop']) $(k).onclick = () => panel.cmd(k);
+  for (const k of ['mic', 'walk', 'hide', 'learn', 'claude', 'quit', 'stop']) $(k).onclick = () => panel.cmd(k);
 </script>

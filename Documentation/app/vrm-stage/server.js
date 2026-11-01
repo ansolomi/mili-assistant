@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { makeLearner } from './learn.js';
+import { makeClaude } from './claude.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dist = path.join(here, 'dist');
@@ -15,6 +16,8 @@ const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 const learner = makeLearner(data);
 setTimeout(() => learner.run(), 60_000); // gentle background pass shortly after start, then hourly
 setInterval(() => learner.run(), 3_600_000);
+const vault = process.env.MILI_VAULT ?? "D:\\Projects\\Alvin's Vault";
+const claude = makeClaude({ cwd: vault, addDir: path.dirname(vault), notes: path.join(vault, 'Mili jobs') });
 const settingsFile = path.join(data, 'stage-settings.json');
 
 const listDir = (sub, exts) => (fs.existsSync(path.join(data, sub)) ? fs.readdirSync(path.join(data, sub)).filter((f) => exts.includes(path.extname(f).toLowerCase())) : []);
@@ -34,6 +37,12 @@ http.createServer(async (req, res) => {
   if (p === '/api/animations') return json(res, listDir('animations', ['.vrma']).map((f) => f.slice(0, -5)));
   if (p === '/api/backgrounds') return json(res, listDir('backgrounds', ['.png', '.jpg', '.jpeg', '.webp']));
   if (p === '/api/learn') return json(res, req.method === 'POST' ? { started: await learner.run() } : learner.status());
+  if (p === '/api/claude') {
+    if (req.method !== 'POST') return json(res, claude.list());
+    const { task } = JSON.parse((await body(req)).toString() || '{}');
+    return task ? json(res, claude.start(String(task))) : json(res, { error: 'task required' }, 400);
+  }
+  if (p === '/api/claude/cancel' && req.method === 'POST') return json(res, { cancelled: claude.cancel(Number(url.searchParams.get('id')) || 0) });
   if (p === '/api/settings') {
     if (req.method === 'POST') { fs.writeFileSync(settingsFile, await body(req)); return json(res, { ok: true }); }
     return json(res, fs.existsSync(settingsFile) ? JSON.parse(fs.readFileSync(settingsFile, 'utf8')) : {});

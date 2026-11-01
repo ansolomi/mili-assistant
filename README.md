@@ -63,9 +63,15 @@ If a step fails, fix the cause (the message says which) and run `setup.ps1` agai
 | **Ctrl+Alt+M** | starts listening; press again to send what you said |
 | Click the pink tray icon (hidden icons area) | control panel: size, talk, walk on/off, hide/show, explore files, quit |
 | Right-click the tray icon | the same actions as a menu |
+| Type `claude, <task>` in her chat box | starts a headless Claude Code job (see below) |
+| Say "hey claude, <task>" or "クロード、<task>" | same, after a 4 s delay; **Ctrl+Alt+C** cancels |
 | Leave the cursor on her | she waves |
 
 Her behaviours (walking, looking around, cheering, sitting on the taskbar or on a window's top edge) happen on their own. Only the pixels of her body take mouse clicks; the rest of her window is click-through.
+
+### Claude Code jobs
+
+Mili can hand work to Claude Code and tell you the result in Japanese. Jobs run `claude -p` with **full permissions** in the Obsidian vault folder (`D:\Projects\Alvin's Vault`, override with `MILI_VAULT`) and may work anywhere under its parent folder. Each job also leaves a note in the vault's `Mili jobs` folder. One-time step: sign in with `claude auth login`. A misheard voice command can change files, so voice tasks wait 4 seconds and Ctrl+Alt+C stops them. Details: `Mili Claude Code bridge.md` in the vault.
 
 ### Learning from your files
 
