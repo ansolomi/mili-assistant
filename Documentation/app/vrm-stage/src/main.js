@@ -10,7 +10,7 @@ const api = async (path, opts) => (await fetch(path, opts)).json();
 
 const saved = await api('/api/settings').catch(() => ({}));
 const overlayMode = params.has('overlay');
-const stage = new Stage(overlayMode ? { width: 360, height: 640, transparent: true } : { width: 1080, height: 1920 });
+const stage = new Stage(overlayMode ? { width: 520, height: 800, transparent: true } : { width: 1080, height: 1920 });
 Object.assign(stage.settings, saved.stage ?? {});
 $('stageWrap').prepend(stage.out);
 window.stage = stage;

@@ -1,10 +1,10 @@
 // Transparent always-on-top window that shows the VRM stage (?overlay=1) and lets it walk along the taskbar.
-const { app, BrowserWindow, Tray, Menu, nativeImage, screen, ipcMain } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, screen, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 
-const W = 360, H = 640;
+const W = 520, H = 800; // she is about 360 px wide inside; the spare room keeps arms, hair and clips from being cut off (click-through outside her)
 const url = process.env.STAGE_URL ?? 'http://localhost:8765/?overlay=1';
 let win, tray;
 
@@ -55,6 +55,23 @@ else app.whenReady().then(async () => {
   });
   ipcMain.on('ignore', (_e, on) => win.setIgnoreMouseEvents(on, { forward: true }));
   ipcMain.on('focus', () => { win.focus(); win.webContents.focus(); });
+  // drag: follow the cursor from the main process (smooth, and independent of page zoom)
+  let dragTimer = null;
+  ipcMain.on('drag', (_e, on) => {
+    clearInterval(dragTimer);
+    if (!on) return;
+    const c = screen.getCursorScreenPoint(), b = win.getBounds();
+    const off = { x: c.x - b.x, y: c.y - b.y };
+    dragTimer = setInterval(() => { const p = screen.getCursorScreenPoint(); win.setPosition(p.x - off.x, p.y - off.y); }, 16);
+  });
+  // size: resize the window and zoom the page to match, keeping her feet and centre where they are
+  ipcMain.handle('scale', (_e, s) => {
+    s = Math.max(0.5, Math.min(1.6, Number(s) || 1));
+    const b = win.getBounds(), w = Math.round(W * s), h = Math.round(H * s);
+    win.setBounds({ x: Math.round(b.x + (b.width - w) / 2), y: b.y + b.height - h, width: w, height: h });
+    win.webContents.setZoomFactor(s);
+    return { ...win.getBounds(), area: screen.getPrimaryDisplay().workArea, scale: s };
+  });
   // cursor position at 10 Hz so she can look at it even though the window is click-through
   const send = (ch) => () => win.webContents.send(ch);
   setInterval(() => win.webContents.send('cursor', screen.getCursorScreenPoint()), 100);
@@ -72,10 +89,39 @@ else app.whenReady().then(async () => {
   });
   app.on('quit', () => fg.kill());
 
+  // control panel: opens from the tray icon, closes when it loses focus
+  const ui = { scale: 1, walk: true, mic: false, hidden: false }; // mirrored from the stage page via 'report'
+  let panel = null;
+  const quitAll = (stop) => { const r = findRoot(); if (stop && r) spawn('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(r, 'stop-vtuber.ps1')], { stdio: 'ignore', windowsHide: true }).unref(); app.quit(); };
+  const toggleHidden = () => { ui.hidden = !ui.hidden; ui.hidden ? win.hide() : win.showInactive(); panel?.webContents.send('state', ui); };
+  const micToggle = () => win.webContents.send('mic-toggle');
+  ipcMain.on('report', (_e, patch) => { Object.assign(ui, patch); panel?.webContents.send('state', ui); });
+  ipcMain.handle('panel-state', () => ui);
+  ipcMain.on('panel-cmd', (_e, name, arg) => {
+    ({ scale: () => win.webContents.send('scale', arg), mic: micToggle, walk: () => win.webContents.send('toggle-walk'), hide: toggleHidden,
+      learn: () => win.webContents.send('learn'), quit: () => quitAll(false), stop: () => quitAll(true) })[name]?.();
+  });
+  const togglePanel = () => {
+    if (panel && !panel.isDestroyed()) { panel.close(); return; }
+    const a = screen.getPrimaryDisplay().workArea, pw = 290, ph = 480;
+    panel = new BrowserWindow({ width: pw, height: ph, x: a.x + a.width - pw - 12, y: a.y + a.height - ph - 12, frame: false, resizable: false, skipTaskbar: true, alwaysOnTop: true, show: false,
+      webPreferences: { preload: path.join(__dirname, 'panel-preload.js') } });
+    panel.loadFile(path.join(__dirname, 'panel.html'));
+    panel.once('ready-to-show', () => panel.show());
+    panel.on('blur', () => panel?.close());
+    panel.on('closed', () => { panel = null; });
+  };
+  globalShortcut.register('Control+Alt+M', micToggle); // talk without clicking her; press again to send
+  app.on('will-quit', () => globalShortcut.unregisterAll());
+
   tray = new Tray(nativeImage.createFromDataURL(`data:image/png;base64,${iconPng}`));
   tray.setToolTip('Mili');
+  tray.on('click', togglePanel);
   tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Open panel', click: togglePanel },
+    { label: 'Hide / show her', click: toggleHidden },
     { label: 'Walk / stay put', click: send('toggle-walk') },
+    { label: 'Size', submenu: [[0.6, 'Small'], [0.8, 'Medium'], [1, 'Normal'], [1.3, 'Large']].map(([v, label]) => ({ label, click: () => win.webContents.send('scale', v) })) },
     { label: 'Explore my files now', click: send('learn') },
     { label: 'Quit (leave services running)', click: () => app.quit() },
     { label: 'Quit and stop all services', click: () => { const r = findRoot(); if (r) spawn('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(r, 'stop-vtuber.ps1')], { stdio: 'ignore', windowsHide: true }).unref(); app.quit(); } },

@@ -77,3 +77,15 @@ Japanese voice switched from Edge TTS (Nanami) to the VOICEVOX engine.
 - Brain: new `tts/voicevox_tts.py` (audio_query then synthesis, Japanese only), registered in tts_factory.py and config_manager/tts.py. conf.yaml: `tts_model: voicevox_tts`, speaker 20 (Mochiko-san normal), intonation 1.1. Other voices: GET /speakers (3 Zundamon, 8 Kasukabe Tsumugi). To go back, set `tts_model: edge_tts`.
 - Check: text and voice chat both return VOICEVOX wav per sentence; the second sentence follows the first within about 0.7 s. I could not listen to the result, so whether it sounds more human is for the user to judge. Voice terms: credit the character (e.g. "VOICEVOX:もち子(cv 明日葉よもぎ)") if the voice is published.
 - Repo layout: the brain is a clone of upstream, so our changes are kept as Open-LLM-VTuber.patch (against upstream 992309c) plus Open-LLM-VTuber-overrides/ (conf.yaml, prompts). Apply with `git apply` in a fresh upstream clone and copy the overrides over it.
+
+## v1.2 (2026-11-01)
+
+Overlay controls, a bigger box, voice input and a tray control panel.
+
+- Drag: press and hold on her and move; release and she drops back to the taskbar. A plain click still opens the chat box. The main process moves the window from the cursor position (`drag` IPC), so it is smooth at any page zoom. Picking her up cancels a running behaviour (perch, walk) via the `aborted` check in overlay.js.
+- Size: mouse wheel over her, the panel slider (50 to 160 %) or the tray Size menu. The window is resized and the page zoomed to match, feet and centre kept. The size is remembered (localStorage `mili.scale`).
+- Bigger box: the window is now 520x800 (was 360x640) with the camera coverage scaled to match, so she looks the same size but arms, hair and clips are no longer cut off. Outside her pixels the window is still click-through.
+- Voice: Ctrl+Alt+M (global hotkey) or the panel button starts listening; press again to send. It reuses the bridge's push-to-talk (16 kHz mono to SenseVoice). Tested: the hotkey toggles the mic and she answers what the mic picked up. A real spoken sentence was not tested this round (the earlier synthesized-speech test covers the ASR path).
+- Control panel: left click the tray icon (hidden icons area) for a panel with Size, Talk, Walk, Hide/Show, Explore files and Quit. Right click keeps the menu. Files: app/overlay/panel.html, panel-preload.js; state flows renderer -> main via `report`.
+- Fixed: the chat box close path had a comment swallowing `box.value = ''`.
+- Checked: wheel resize (360x640 to 285x507, feet fixed), drag and drop to the floor, hotkey mic on and off, panel rendered in a standalone Electron window. Not checked: clicking the real tray icon (it sits in the hidden-icons flyout), dragging while perched, very large sizes near screen edges.

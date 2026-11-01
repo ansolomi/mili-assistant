@@ -5,13 +5,15 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const sleep = (s) => new Promise((ok) => setTimeout(ok, s * 1000));
 const SPEED = 60; // px per second
 const PX_PER_M = 640 / 1.8; // window height over camera coverage
-const SIT_DROP = 0.45 * PX_PER_M; // feet hang this far below the edge she sits on
+const SIT_DROP = 0.45 * PX_PER_M; // feet hang this far below the edge she sits on (at normal size)
+const MIN_SCALE = 0.5, MAX_SCALE = 1.6;
+const aborted = new Error('aborted'); // thrown inside a behaviour when she is picked up
 const CLIPS = ['hang', 'sit_down', 'sit', 'sit_up', 'idle_look', 'wave_fast'];
 
 export async function startOverlay({ stage, bridge, say }) {
   document.body.classList.add('overlay');
   const s = stage.settings;
-  s.cameraCoverage = 1.8;
+  s.cameraCoverage = 1.8 * (stage.H / 640); // she stays the same size on screen however big the window is
   s.subtitleY = 0.1;
   s.subtitleSize = 24;
   s.cameraCenterOffset = s.cameraCoverage / 2 - 0.03 - stage.headY; // feet at the bottom edge of the window
@@ -20,17 +22,19 @@ export async function startOverlay({ stage, bridge, say }) {
   const ov = window.overlay && { ...window.overlay, setPos: (x, y) => Number.isFinite(x) && Number.isFinite(y) && window.overlay.setPos(x, y) }; // drop NaN positions instead of crashing the main process
   if (!ov) return () => {}; // opened in a normal browser: transparent look only
   await stage.loadClips(CLIPS);
-  const b = await ov.bounds();
+  const b = await ov.bounds(); // width and height change with her size
   const area = b.area;
-  const floorY = area.y + area.height - b.height + 6;
-  const st = { x: b.x, y: floorY, walk: true, chat: false, over: false, busy: false, goal: null, arrive: null, tween: null, follow: null, idle: 4, fg: null, cursor: { x: 0, y: 0 }, lastGreet: -99, hover: 0 };
+  let floorY = area.y + area.height - b.height + 6;
+  let sc = 1;
+  const st = { x: b.x, y: floorY, dragged: false, drag: false, press: null, walk: true, chat: false, over: false, busy: false, goal: null, arrive: null, tween: null, follow: null, idle: 4, fg: null, cursor: { x: 0, y: 0 }, lastGreet: -99, hover: 0 };
   ov.setPos(st.x, st.y);
 
   const box = document.getElementById('ovChat');
   const setChat = (on) => {
     st.chat = on;
     box.style.display = on ? 'block' : 'none';
-    if (on) { ov.focus(); setTimeout(() => box.focus(), 150); } else // the window takes focus asynchronously box.value = '';
+    if (on) { ov.focus(); setTimeout(() => box.focus(), 150); } // the window takes focus asynchronously
+    else box.value = '';
     ov.ignore(!(on || st.over));
   };
   box.onkeydown = (e) => {
@@ -43,17 +47,60 @@ export async function startOverlay({ stage, bridge, say }) {
     const r = stage.out.getBoundingClientRect();
     const px = Math.floor(((e.clientX - r.left) / r.width) * stage.W), py = Math.floor(((e.clientY - r.top) / r.height) * stage.H);
     const hit = px >= 0 && py >= 0 && px < stage.W && py < stage.H && stage.ctx.getImageData(px, py, 1, 1).data[3] > 20;
-    if (hit !== st.over) { st.over = hit; if (!st.chat) ov.ignore(!hit); }
+    if (hit !== st.over) { st.over = hit; if (!st.chat && !st.drag) ov.ignore(!hit); }
+    if (st.press && !st.drag && Math.hypot(e.screenX - st.press.x, e.screenY - st.press.y) > 6) pickUp();
   });
-  window.addEventListener('pointerdown', () => { if (st.over && !st.chat) setChat(true); });
+
+  // press and hold to carry her; a plain click opens the chat box
+  const pickUp = () => {
+    st.drag = st.dragged = true;
+    st.goal = null; st.follow = null; stage.walkDir = 0;
+    st.arrive?.();
+    if (st.tween) { const t = st.tween; st.tween = null; t.ok(); }
+    stage.stopClip(); // also ends a pending clip, so a running behaviour wakes up and sees `dragged`
+    ov.drag(true);
+  };
+  const drop = async () => {
+    const wasDrag = st.drag;
+    st.press = null; st.drag = false;
+    if (!wasDrag) return;
+    ov.drag(false);
+    Object.assign(b, await ov.bounds());
+    st.x = b.x; st.y = b.y;
+    if (st.y < floorY - 4) st.tween = { from: st.y, to: floorY, t: 0, dur: 0.5, ease: (t) => t * t, ok() {} }; // she drops back to the taskbar
+  };
+  window.addEventListener('pointerdown', (e) => { if (st.over && !st.chat) st.press = { x: e.screenX, y: e.screenY }; });
+  window.addEventListener('pointerup', () => { const click = st.press && !st.drag; st.press = null; if (click) setChat(true); else drop(); });
+  window.addEventListener('blur', drop);
+
+  // size: mouse wheel over her, or the tray menu; remembered between runs
+  const setScale = async (v) => {
+    const onFloor = Math.abs(st.y - floorY) < 8;
+    sc = clamp(v, MIN_SCALE, MAX_SCALE);
+    Object.assign(b, await ov.scale(sc));
+    floorY = area.y + area.height - b.height + 6;
+    st.x = b.x; st.y = onFloor ? floorY : b.y;
+    ov.report({ scale: sc });
+    try { localStorage.setItem('mili.scale', String(sc)); } catch { /* private mode: not remembered */ }
+  };
+
+  // voice: Ctrl+Alt+M (or the panel) starts listening, the same again sends it
+  const onMic = bridge.h.onMic;
+  bridge.h.onMic = (on) => { onMic?.(on); ov.report({ mic: on }); if (on) say('Listening... press Ctrl+Alt+M to send', 'info'); };
+  ov.on('mic-toggle', () => (bridge.mic ? bridge.stopMic() : bridge.startMic().catch((e) => say(`Mic: ${e.message}`, 'info'))));
+  window.addEventListener('wheel', (e) => { if (st.over && !st.drag) setScale(sc * (e.deltaY < 0 ? 1.06 : 1 / 1.06)); });
+  ov.on('scale', setScale);
+  let saved = NaN;
+  try { saved = Number(localStorage.getItem('mili.scale')); } catch { /* not remembered */ }
+  if (saved && saved !== 1) { await setScale(saved); ov.setPos(st.x, st.y); }
 
   ov.on('cursor', (p) => {
     st.cursor = p;
     stage.pointer.x = clamp((p.x - (st.x + b.width / 2)) / 900, -1, 1);
-    stage.pointer.y = clamp(-(p.y - (st.y + b.height * 0.2)) / 600, -1, 1);
+    stage.pointer.y = clamp(-(p.y - (st.y + b.height - 544 * sc)) / 600, -1, 1);
   });
   ov.on('fg', (w) => (st.fg = w));
-  ov.on('toggle-walk', () => { st.walk = !st.walk; say(st.walk ? 'Walking again' : 'Staying put', 'info'); });
+  ov.on('toggle-walk', () => { st.walk = !st.walk; ov.report({ walk: st.walk }); say(st.walk ? 'Walking again' : 'Staying put', 'info'); });
   ov.on('learn', () => fetch('/api/learn', { method: 'POST' }));
 
   // show what the file explorer is reading
@@ -66,13 +113,14 @@ export async function startOverlay({ stage, bridge, say }) {
   }, 3000);
 
   // ---- movement primitives ----
-  const walkTo = (x) => new Promise((ok) => { st.goal = clamp(x, area.x - 60, area.x + area.width - b.width + 60); st.arrive = ok; });
+  const pad = () => (b.width - 360 * sc) / 2; // empty room either side of her inside the window
+  const walkTo = (x) => new Promise((ok) => { st.goal = clamp(x, area.x - 60 - pad(), area.x + area.width - b.width + 60 + pad()); st.arrive = ok; });
   const tweenY = (to, dur, ease = (t) => t) => new Promise((ok) => { st.tween = { from: st.y, to, t: 0, dur, ease, ok }; });
 
   // a window whose top edge leaves room for her to sit on it
   const perchWindow = () => {
     const w = st.fg;
-    return w && !w.max && w.w >= 350 && w.y >= 360 && w.y < area.y + area.height - 200 ? w : null;
+    return w && !w.max && w.w >= 350 && w.y >= 360 * sc && w.y < area.y + area.height - 200 ? w : null;
   };
 
   async function perch() {
@@ -80,20 +128,25 @@ export async function startOverlay({ stage, bridge, say }) {
     // shortcut: no window handle, so the window is tracked by size; if it closes she sits on until the timer ends
     let anchor = win && Math.random() < 0.7 ? { ...win } : null;
     const edge = () => (anchor ? anchor.y : area.y + area.height);
-    const seatY = () => edge() + SIT_DROP - b.height + 6;
+    const seatY = () => edge() + SIT_DROP * sc - b.height + 6;
+    const check = () => { if (st.dragged) throw aborted; }; // picked up: give up the rest of the behaviour
     await walkTo(anchor ? anchor.x + anchor.w * (0.25 + Math.random() * 0.5) - b.width / 2 : area.x + Math.random() * (area.width - b.width));
+    check();
     const off = anchor ? st.x - anchor.x : 0;
     stage.playClip('hang', { hold: true }); // reaches up, then pulls herself onto the edge
     await tweenY(seatY(), 0.9, (t) => 1 - (1 - t) ** 3);
+    check();
     await stage.playClip('sit_down', { hold: true });
+    check();
     stage.playClip('sit', { loop: true });
     st.follow = anchor ? () => ({ x: anchor.x + off, y: seatY() }) : null;
     const until = performance.now() + (20 + Math.random() * 25) * 1000;
-    while (performance.now() < until) {
+    while (performance.now() < until && !st.dragged) {
       const w = st.fg;
       if (anchor && w && !w.max && Math.abs(w.w - anchor.w) < 40) anchor = { ...w };
       await sleep(0.4);
     }
+    check();
     st.follow = null;
     await stage.playClip('sit_up');
     await tweenY(floorY, 0.5, (t) => t * t);
@@ -104,13 +157,14 @@ export async function startOverlay({ stage, bridge, say }) {
 
   async function act() {
     st.busy = true;
+    st.dragged = false;
     try {
       const r = Math.random();
       if (r < 0.45) await walkTo(area.x - 60 + Math.random() * (area.width - b.width + 120));
       else if (r < 0.65) await lookAround();
       else if (r < 0.9) await perch();
       else await cheer();
-    } catch (e) { console.warn('overlay act failed', e); }
+    } catch (e) { if (e !== aborted) console.warn('overlay act failed', e); }
     stage.stopClip();
     st.busy = false;
     st.idle = 5 + Math.random() * 15;
@@ -120,6 +174,7 @@ export async function startOverlay({ stage, bridge, say }) {
   window.mili = { perch: () => { st.busy = true; return perch().finally(() => { st.busy = false; }); }, lookAround, cheer, state: st };
 
   return (dt) => {
+    if (st.drag) return; // the main process is moving the window under the cursor
     // keep moving whatever she is doing: tweens (climbing) and following a moving window
     if (st.tween) {
       const w = st.tween;
@@ -134,7 +189,7 @@ export async function startOverlay({ stage, bridge, say }) {
     }
 
     // greet the cursor when it lingers near her
-    const c = st.cursor, dx = c.x - (st.x + b.width / 2), dy = c.y - (st.y + b.height * 0.5);
+    const c = st.cursor, dx = c.x - (st.x + b.width / 2), dy = c.y - (st.y + b.height - 320 * sc);
     st.hover = Math.abs(dx) < 140 && Math.abs(dy) < 260 ? st.hover + dt : 0;
     if (st.hover > 1.5 && stage.t - st.lastGreet > 90 && !st.chat && !stage.action) { st.lastGreet = stage.t; stage.gesture('wave', 3); }
 
