@@ -27,7 +27,7 @@ export const POSES = {
   handsBack: { leftUpperArm: [0.55, 0, -1.15], rightUpperArm: [0.55, 0, 1.15], leftLowerArm: [0, -0.9, 0], rightLowerArm: [0, 0.9, 0] },
   handsFront: { leftUpperArm: [-0.25, 0, -1.0], rightUpperArm: [-0.25, 0, 1.0], leftLowerArm: [0, 1.0, 0], rightLowerArm: [0, -1.0, 0] },
   shrug: { leftShoulder: [0, 0, 0.2], rightShoulder: [0, 0, -0.2] },
-  wave: { rightUpperArm: [0, 0, -0.25], rightLowerArm: [0, -0.5, 0] },
+  wave: { rightUpperArm: [0, 0, -0.1], rightLowerArm: [0, 0, -1.35] }, // upper arm out, forearm up; the hand swings about the elbow
 };
 const IDLE_POSES = ['relaxed', 'handsBack', 'handsFront', 'relaxed', 'shrug'];
 
@@ -615,7 +615,7 @@ export class Stage {
       b.leftUpperArm.rotation.set(a.leftUpperArm[0] + armSwing, 0,a.leftUpperArm[2] + sway * 0.015 + breath * 0.01 - armLift * 0.4);
       b.rightUpperArm.rotation.set(a.rightUpperArm[0] - armSwing,0, a.rightUpperArm[2] - sway * 0.015 - breath * 0.01 + armLift);
       b.leftLowerArm.rotation.set(0, a.leftLowerArm[1], 0);
-      b.rightLowerArm.rotation.set(0, a.rightLowerArm[1] + wave + sp * 0.25 * (0.5 + 0.5 * Math.sin(t * 3.1)), 0);
+      b.rightLowerArm.rotation.set(0, a.rightLowerArm[1] + sp * 0.25 * (0.5 + 0.5 * Math.sin(t * 3.1)), a.rightLowerArm[2] + wave);
       b.leftShoulder.rotation.z = a.leftShoulder[2] + breath * 0.006;
       b.rightShoulder.rotation.z = a.rightShoulder[2] - breath * 0.006;
       this.braidSegs?.forEach((sg, i) => (sg.position.x = 0.108 + Math.sin(t * 1.3 - i * 0.5) * 0.003 * i + shift * 0.002 * i));
