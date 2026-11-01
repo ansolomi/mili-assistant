@@ -111,3 +111,6 @@ Overlay controls, a bigger box, voice input and a tray control panel.
 ## v1.4.1: skirt physics
 
 - Taila has 21 skirt bones (`DEF-skirt*`, single leaf bones under the spine) but no spring bone data, so the skirt was rigid. `Stage.buildSkirtPhysics()` adds `VRMSpringBoneJoint`s to those leaf bones at load (stiffness 0.55, drag 0.35), capsule colliders on both thighs so legs push the skirt aside, and a wind term against the walking direction (she walks in place, so there is no real inertia). Models that bring their own spring bones are left alone. Hair has the same gap (no spring data) and is not touched yet.
+
+## v1.4.2 skirt follows the legs
+Seated, the thigh still cut through the skirt hem because the skirt bones sit rigid under the pelvis. `Stage.skirtFollowLegs()` now runs after `vrm.update`: each skirt bone is rotated about its own origin by a distance-weighted share (gain 0.8, reach 0.16 m) of the nearby thigh's swing. Measured in the seated pose: skirt vertices closer than 0.048 m to a thigh axis went from 86 to 0, nearest vertex 0.013 m to 0.057 m (thigh radius about 0.057).

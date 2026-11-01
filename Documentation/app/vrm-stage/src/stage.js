@@ -33,6 +33,7 @@ const IDLE_POSES = ['relaxed', 'handsBack', 'handsFront', 'relaxed', 'shrug'];
 
 const lerp = (a, b, t) => a + (b - a) * t;
 const smooth = (t) => t * t * (3 - 2 * t);
+const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qc = new THREE.Quaternion(), _qd = new THREE.Quaternion(), _qe = new THREE.Quaternion(), _qf = new THREE.Quaternion(), _v = new THREE.Vector3();
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 
 export class Stage {
@@ -725,6 +726,29 @@ export class Stage {
     }
 
     vrm.update(dt);
+    this.skirtFollowLegs();
+  }
+
+  // The skirt bones are rigid under the pelvis, so a thigh swung forward (sitting, stepping) cuts through the hem. After the
+  // spring step, rotate each skirt bone about its own origin by a share of the nearby thigh's swing (world-space delta).
+  skirtFollowLegs() {
+    const joints = this.skirtJoints;
+    if (!joints?.length) return;
+    const B = this.bones, k = this.skirtFollow ?? { gain: 0.8, reach: 0.16 };
+    const Qh = B.hips.getWorldQuaternion(_qa);
+    const legs = ['left', 'right'].map((s) => {
+      const ql = B[`${s}UpperLeg`].quaternion;
+      return { d: new THREE.Quaternion().copy(Qh).multiply(ql).multiply(_qb.copy(Qh).invert()), p: this.vrm.humanoid.getRawBoneNode(`${s}UpperLeg`).getWorldPosition(new THREE.Vector3()) };
+    });
+    for (const j of joints) {
+      const bone = j.bone, P = bone.parent.getWorldQuaternion(_qc), pos = bone.getWorldPosition(_v);
+      const D = _qd.identity();
+      for (const l of legs) {
+        const w = k.gain * Math.exp(-((pos.distanceTo(l.p) / k.reach) ** 2));
+        D.multiply(_qe.identity().slerp(l.d, w));
+      }
+      bone.quaternion.premultiply(_qf.copy(P).invert().multiply(D).multiply(P));
+    }
   }
 
   // render at k times the logical size so a zoomed or high-DPI window stays sharp (W and H stay the drawing units)
