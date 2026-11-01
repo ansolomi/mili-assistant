@@ -151,7 +151,7 @@ export class Stage {
     if (vrm.lookAt) vrm.lookAt.target = this.lookTarget;
     this.bones = {};
     for (const n of ['hips', 'spine', 'chest', 'upperChest', 'neck', 'head', 'leftShoulder', 'rightShoulder', 'leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm', 'leftHand', 'rightHand', 'leftUpperLeg', 'rightUpperLeg', 'leftLowerLeg', 'rightLowerLeg']) {
-      this.bones[n] = vrm.humanoid.getNormalizedBoneNode(n);
+      this.bones[n] = vrm.humanoid.getNormalizedBoneNode(n) ?? new THREE.Object3D(); // optional bones (shoulders, upper chest) may be missing: poses write to a detached dummy
     }
     this.flipBones = Math.abs(this.baseYaw) > 1 ? Object.keys(vrm.humanoid.humanBones).map((n) => vrm.humanoid.getNormalizedBoneNode(n)).filter(Boolean) : null;
     this.hipsY0 = this.bones.hips.position.y;
