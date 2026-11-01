@@ -21,7 +21,7 @@ function findExe() {
   return found[0]?.f ?? null;
 }
 
-export function makeClaude({ cwd, addDir, notes, sessionFile }) {
+export function makeClaude({ cwd, addDir, notes, sessionFile, cloudFile }) {
   const jobs = [];
   // Her "room": every job resumes one session, kept across restarts, so she remembers earlier tasks. Open it yourself with `claude --resume <id>` from the vault folder.
   let session = null;
@@ -67,5 +67,15 @@ export function makeClaude({ cwd, addDir, notes, sessionFile }) {
     return n;
   }
 
-  return { start, cancel, list: () => jobs.map(view), session: () => session, reset: () => setSession(null) };
+  // Send-only: `claude -p msg --cloud <id>` queues the task in an existing cloud session (made at claude.ai/code); the CLI returns no reply.
+  const cloudId = () => { try { return JSON.parse(fs.readFileSync(cloudFile, 'utf8')).id || null; } catch { return process.env.MILI_CLOUD_SESSION || null; } };
+  function cloud(task) {
+    const exe = findExe(), id = cloudId();
+    if (!exe || !id) return { ok: false, error: exe ? 'no cloud session id (data/cloud-session.json)' : 'Claude Code was not found' };
+    const r = spawnSync(exe, ['-p', task, '--cloud', id], { cwd, windowsHide: true, encoding: 'utf8', timeout: 60000 });
+    const out = `${r.stdout ?? ''}${r.stderr ?? ''}`.trim();
+    return r.status === 0 ? { ok: true, url: /https:\/\/\S+/.exec(out)?.[0] } : { ok: false, error: out.slice(0, 300) || 'failed' };
+  }
+
+  return { start, cancel, cloud, cloudId, list: () => jobs.map(view), session: () => session, reset: () => setSession(null) };
 }

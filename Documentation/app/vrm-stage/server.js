@@ -17,7 +17,7 @@ const learner = makeLearner(data);
 setTimeout(() => learner.run(), 60_000); // gentle background pass shortly after start, then hourly
 setInterval(() => learner.run(), 3_600_000);
 const vault = process.env.MILI_VAULT ?? "D:\\Projects\\Alvin's Vault";
-const claude = makeClaude({ cwd: vault, addDir: path.dirname(vault), notes: path.join(vault, 'Mili jobs'), sessionFile: path.join(data, 'claude-session.json') });
+const claude = makeClaude({ cwd: vault, addDir: path.dirname(vault), notes: path.join(vault, 'Mili jobs'), sessionFile: path.join(data, 'claude-session.json'), cloudFile: path.join(data, 'cloud-session.json') });
 const inbox = []; // things other sessions asked her to say; the overlay drains it
 const settingsFile = path.join(data, 'stage-settings.json');
 
@@ -45,6 +45,12 @@ http.createServer(async (req, res) => {
     return task ? json(res, claude.start(String(task))) : json(res, { error: 'task required' }, 400);
   }
   if (p === '/api/claude/session') return json(res, req.method === 'POST' ? { reset: claude.reset() ?? true } : { id: claude.session(), cwd: vault });
+  if (p === '/api/cloud') {
+    if (req.method !== 'POST') return json(res, { configured: !!claude.cloudId() });
+    let task;
+    try { ({ task } = JSON.parse((await body(req)).toString() || '{}')); } catch { return json(res, { error: 'invalid JSON' }, 400); }
+    return task ? json(res, claude.cloud(String(task))) : json(res, { error: 'task required' }, 400);
+  }
   if (p === '/api/say' && req.method === 'POST') { // localhost only (the server listens on 127.0.0.1)
     let text;
     try { ({ text } = JSON.parse((await body(req)).toString() || '{}')); } catch { return json(res, { error: 'invalid JSON' }, 400); }

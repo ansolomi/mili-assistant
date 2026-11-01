@@ -116,7 +116,13 @@ export async function startOverlay({ stage, bridge, say }) {
   const cancelClaude = () => { if (pending) { clearTimeout(pending); pending = null; say('Cancelled', 'info'); } fetch('/api/claude/cancel', { method: 'POST' }); };
   const runClaude = (task) => fetch('/api/claude', { method: 'POST', body: JSON.stringify({ task }) }).then(() => say(`Claude Code: ${task}`, 'info'));
   const sendText = bridge.sendText.bind(bridge);
-  bridge.sendText = (t) => { const m = TYPED.exec(t); if (m) runClaude(m[1]); else sendText(t); };
+  const CLOUD = /^\s*cloud[\s,、:：.。-]+(.+)$/is; // typed only: "cloud, <task>" queues it in the cloud room
+  const runCloud = async (task) => {
+    say(`Cloud room: ${task}`, 'info');
+    const r = await fetch('/api/cloud', { method: 'POST', body: JSON.stringify({ task }) }).then((x) => x.json()).catch((e) => ({ ok: false, error: e.message }));
+    sendText(r.ok ? '[Task queued in the cloud Claude Code room] Tell me in one short Japanese sentence that it was sent; the answer will be on claude.ai.' : `[Cloud room failed] Tell me briefly in Japanese that it failed. Reason: ${String(r.error).slice(0, 150)}`);
+  };
+  bridge.sendText = (t) => { const c = CLOUD.exec(t), m = TYPED.exec(t); if (c) runCloud(c[1]); else if (m) runClaude(m[1]); else sendText(t); };
   const onUserText = bridge.h.onUserText;
   bridge.h.onUserText = (t) => {
     onUserText?.(t);
