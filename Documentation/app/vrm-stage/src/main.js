@@ -85,7 +85,7 @@ const OWN_LOOK = { hairTint: false, outfitTint: false, ears: false, hairpin: fal
 let lookBackup = null;
 async function loadModel(name) {
   say(`Loading ${name}...`, 'info');
-  if (/taila/i.test(name)) { lookBackup ??= Object.fromEntries(Object.keys(OWN_LOOK).map((k) => [k, stage.settings[k]])); Object.assign(stage.settings, OWN_LOOK); }
+  if (!/twist/i.test(name)) { lookBackup ??= Object.fromEntries(Object.keys(OWN_LOOK).map((k) => [k, stage.settings[k]])); Object.assign(stage.settings, OWN_LOOK); }
   else if (lookBackup) { Object.assign(stage.settings, lookBackup); lookBackup = null; }
   const info = await stage.loadVRM(`/data/models/${encodeURIComponent(name)}`);
   console.log('VRM loaded', info);

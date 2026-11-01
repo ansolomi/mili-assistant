@@ -153,6 +153,7 @@ export class Stage {
     for (const n of ['hips', 'spine', 'chest', 'upperChest', 'neck', 'head', 'leftShoulder', 'rightShoulder', 'leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm', 'leftHand', 'rightHand', 'leftUpperLeg', 'rightUpperLeg', 'leftLowerLeg', 'rightLowerLeg']) {
       this.bones[n] = vrm.humanoid.getNormalizedBoneNode(n);
     }
+    this.flipBones = Math.abs(this.baseYaw) > 1 ? Object.keys(vrm.humanoid.humanBones).map((n) => vrm.humanoid.getNormalizedBoneNode(n)).filter(Boolean) : null;
     this.hipsY0 = this.bones.hips.position.y;
     this.mixer = null;
     this.action = null;
@@ -726,7 +727,12 @@ export class Stage {
       j.settings.gravityPower = 0.22 * wk;
     }
 
+    // VRM 0.x bones live in a frame turned half a circle about Y from the one all poses and clips are written in:
+    // mirror x and z of each normalised bone for the update, then put them back for the next frame.
+    const flip = () => { for (const n of this.flipBones ?? []) { n.quaternion.x *= -1; n.quaternion.z *= -1; } const h = this.bones.hips.position; h.x *= -1; h.z *= -1; };
+    if (this.flipBones) flip();
     vrm.update(dt);
+    if (this.flipBones) flip();
     this.skirtFollowLegs();
   }
 

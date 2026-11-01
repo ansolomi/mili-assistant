@@ -73,6 +73,7 @@ export async function startOverlay({ stage, bridge, say, switchModel, models, st
     if (e.key === 'Escape') setChat(false);
   };
   document.getElementById('ovSend').onclick = send;
+  document.getElementById('ovClose').onclick = () => setChat(false);
   document.getElementById('ovAttach').onclick = () => picker.click();
   const attach = async (list) => {
     for (const f of list) {
