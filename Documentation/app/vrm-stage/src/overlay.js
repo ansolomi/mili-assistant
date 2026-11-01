@@ -8,7 +8,10 @@ const PX_PER_M = 640 / 1.8; // window height over camera coverage
 const SIT_DROP = 0.45 * PX_PER_M; // feet hang this far below the edge she sits on (at normal size)
 const MIN_SCALE = 0.5, MAX_SCALE = 1.6;
 const aborted = new Error('aborted'); // thrown inside a behaviour when she is picked up
-const CLIPS = ['hang', 'sit_down', 'sit', 'sit_up', 'idle_look', 'wave_fast'];
+const DANCES = ['dance_rumba', 'dance_march', 'dance_dab', 'dance_soul_spin', 'dance_silly'];
+const CLIPS = ['hang', 'sit_down', 'sit', 'sit_up', 'idle_look', 'wave_fast', 'joyful_jump', 'head_shake', 'idle_dwarf', 'spin', 'cross_jumps', 'arm_stretch', ...DANCES];
+const NAP_AFTER = 10 * 60 * 1000; // no cursor movement, clicks or chat for this long: she dozes off on a ledge
+const pick = (table) => { let r = Math.random() * table.reduce((s, [w]) => s + w, 0); for (const [w, f] of table) if ((r -= w) < 0) return f; return table[0][1]; };
 
 export async function startOverlay({ stage, bridge, say }) {
   document.body.classList.add('overlay');
@@ -26,12 +29,12 @@ export async function startOverlay({ stage, bridge, say }) {
   const area = b.area;
   let floorY = area.y + area.height - b.height + 6;
   let sc = 1;
-  const st = { x: b.x, y: floorY, dragged: false, drag: false, press: null, walk: true, chat: false, over: false, busy: false, goal: null, arrive: null, tween: null, follow: null, idle: 4, fg: null, cursor: { x: 0, y: 0 }, lastGreet: -99, hover: 0 };
+  const st = { lastActive: performance.now(), napAfter: NAP_AFTER, x: b.x, y: floorY, dragged: false, drag: false, press: null, walk: true, chat: false, over: false, busy: false, goal: null, arrive: null, tween: null, follow: null, idle: 4, fg: null, cursor: { x: 0, y: 0 }, lastGreet: -99, hover: 0 };
   ov.setPos(st.x, st.y);
 
   const box = document.getElementById('ovChat');
   const setChat = (on) => {
-    st.chat = on;
+    st.chat = on; st.lastActive = performance.now();
     box.style.display = on ? 'block' : 'none';
     if (on) { ov.focus(); setTimeout(() => box.focus(), 150); } // the window takes focus asynchronously
     else box.value = '';
@@ -54,7 +57,7 @@ export async function startOverlay({ stage, bridge, say }) {
 
   // press and hold to carry her; a plain click opens the chat box
   const pickUp = () => {
-    st.drag = st.dragged = true;
+    st.drag = st.dragged = true; st.lastActive = performance.now();
     st.goal = null; st.follow = null; stage.walkDir = 0;
     st.arrive?.();
     if (st.tween) { const t = st.tween; st.tween = null; t.ok(); }
@@ -94,6 +97,17 @@ export async function startOverlay({ stage, bridge, say }) {
   const micToggle = () => (bridge.mic ? bridge.stopMic() : bridge.startMic().catch((e) => say(`Mic: ${e.message}`, 'info')));
   micBtn.onclick = micToggle;
   ov.on('mic-toggle', micToggle);
+  // her mood shows in her body now and then (cooldown 40 s so a chatty reply does not turn into a dance)
+  const onEmotion = bridge.h.onEmotion;
+  let lastMood = -99;
+  bridge.h.onEmotion = (name) => {
+    onEmotion?.(name);
+    if (!name || name === 'neutral' || stage.t - lastMood < 40 || Math.random() > 0.35) return;
+    const how = { joy: () => window.mili.react(() => stage.playClip('joyful_jump')), anger: () => window.mili.react(() => stage.playClip('head_shake')),
+      sadness: () => !st.busy && stage.perform('sleepy', 4), surprise: () => !st.busy && stage.perform('earPerk'), fear: () => !st.busy && stage.perform('shy') }[name];
+    if (how) { lastMood = stage.t; how(); }
+  };
+
   // Claude Code: "claude, <task>" typed, or "hey claude, <task>" spoken, skips her LLM and starts a headless job.
   // Voice waits 4 s first (speech recognition can mishear) so Ctrl+Alt+C can still stop it.
   const TYPED = /^\s*(?:(?:hey|ok|okay)[\s,]+)?(?:claude|クロード)[\s,、:：.。-]+(.+)$/is;
@@ -125,6 +139,7 @@ export async function startOverlay({ stage, bridge, say }) {
       told.add(j.id);
       if (first) continue; // finished before she started: nothing new to report
       say(`Claude Code (${j.status}): ${j.result?.slice(0, 300)}`, 'info');
+      window.mili?.react(() => stage.playClip(j.status === 'done' ? 'joyful_jump' : 'head_shake'));
       if (j.status === 'done') bridge.sendText(`[Claude Code finished "${j.task.slice(0, 80)}"] Tell me in one or two short Japanese sentences: ${j.mili ?? j.result.slice(0, 300)}`);
       else if (j.status === 'error') bridge.sendText(`[Claude Code failed] Tell me briefly in Japanese that it failed. Reason: ${j.result.slice(0, 200)}`);
     }
@@ -138,6 +153,7 @@ export async function startOverlay({ stage, bridge, say }) {
   else stage.setResolution(clamp(window.devicePixelRatio, 1, 2.5));
 
   ov.on('cursor', (p) => {
+    if (Math.hypot(p.x - st.cursor.x, p.y - st.cursor.y) > 6) st.lastActive = performance.now();
     st.cursor = p;
     stage.pointer.x = clamp((p.x - (st.x + b.width / 2)) / 900, -1, 1);
     stage.pointer.y = clamp(-(p.y - (st.y + b.height - 544 * sc)) / 600, -1, 1);
@@ -166,7 +182,7 @@ export async function startOverlay({ stage, bridge, say }) {
     return w && !w.max && w.w >= 350 && w.y >= 360 * sc && w.y < area.y + area.height - 200 ? w : null;
   };
 
-  async function perch() {
+  async function perch(nap = false) {
     const win = perchWindow();
     // shortcut: no window handle, so the window is tracked by size; if it closes she sits on until the timer ends
     let anchor = win && Math.random() < 0.7 ? { ...win } : null;
@@ -183,16 +199,29 @@ export async function startOverlay({ stage, bridge, say }) {
     check();
     stage.playClip('sit', { loop: true });
     st.follow = anchor ? () => ({ x: anchor.x + off, y: seatY() }) : null;
-    const until = performance.now() + (20 + Math.random() * 25) * 1000;
-    while (performance.now() < until && !st.dragged) {
+    const start = performance.now();
+    const until = start + (nap ? Infinity : (20 + Math.random() * 25) * 1000);
+    while (performance.now() < until && !st.dragged && !(nap && st.lastActive > start)) {
       const w = st.fg;
       if (anchor && w && !w.max && Math.abs(w.w - anchor.w) < 40) anchor = { ...w };
+      if (!stage.fx) { if (nap) stage.perform('sleepy', 6); else if (Math.random() < 0.04) stage.perform('yawn'); } // head and eyes only, the sit clip keeps the body
       await sleep(0.4);
     }
     check();
     st.follow = null;
     await stage.playClip('sit_up');
     await tweenY(floorY, 0.5, (t) => t * t);
+    if (nap) { await stage.perform('yawn'); check(); await stage.perform('stretch'); }
+  }
+
+  // small reactions that do not need her to walk anywhere
+  const dance = async () => { const n = DANCES[Math.floor(Math.random() * DANCES.length)]; await stage.playClip(n); if (Math.random() < 0.5) await stage.playClip(n); };
+  const stretch = () => (Math.random() < 0.5 ? stage.perform('stretch') : stage.playClip('arm_stretch'));
+  async function react(how) { // used for events (job finished, emotions); skipped while she is busy
+    if (st.busy || st.drag || st.chat) return;
+    st.busy = true; st.dragged = false;
+    try { await how(); } catch (e) { if (e !== aborted) console.warn('react failed', e); }
+    stage.stopClip(); st.busy = false; st.idle = 5 + Math.random() * 15;
   }
 
   async function lookAround() { await stage.playClip('idle_look'); }
@@ -202,11 +231,12 @@ export async function startOverlay({ stage, bridge, say }) {
     st.busy = true;
     st.dragged = false;
     try {
-      const r = Math.random();
-      if (r < 0.45) await walkTo(area.x - 60 + Math.random() * (area.width - b.width + 120));
-      else if (r < 0.65) await lookAround();
-      else if (r < 0.9) await perch();
-      else await cheer();
+      await pick([
+        [30, () => walkTo(area.x - 60 + Math.random() * (area.width - b.width + 120))],
+        [10, lookAround], [18, perch], [5, cheer], [7, stretch], [5, () => stage.perform('yawn')], [5, () => stage.perform('earPerk')],
+        [3, () => stage.perform('shy')], [7, dance], [4, () => stage.playClip('joyful_jump')], [4, () => stage.playClip('spin')],
+        [2, () => stage.playClip('idle_dwarf')], [2, () => stage.playClip('cross_jumps')],
+      ])();
     } catch (e) { if (e !== aborted) console.warn('overlay act failed', e); }
     stage.stopClip();
     st.busy = false;
@@ -214,7 +244,12 @@ export async function startOverlay({ stage, bridge, say }) {
   }
 
   // debug hook: window.mili.perch() from devtools forces a behaviour
-  window.mili = { perch: () => { st.busy = true; return perch().finally(() => { st.busy = false; }); }, lookAround, cheer, state: st };
+  async function startNap() {
+    st.busy = true; st.dragged = false;
+    try { await perch(true); } catch (e) { if (e !== aborted) console.warn('nap failed', e); }
+    stage.stopClip(); st.busy = false; st.idle = 5 + Math.random() * 15; st.lastActive = performance.now();
+  }
+  window.mili = { perch: () => { st.busy = true; return perch().finally(() => { st.busy = false; }); }, nap: startNap, lookAround, cheer, react, play: (n) => react(() => stage.playClip(n)), perform: (n) => react(() => stage.perform(n)), state: st };
 
   return (dt) => {
     if (st.drag) return; // the main process is moving the window under the cursor
@@ -250,6 +285,7 @@ export async function startOverlay({ stage, bridge, say }) {
     }
     stage.walkDir = 0;
     if (st.busy || !st.walk || talking) return;
+    if (performance.now() - st.lastActive > st.napAfter) return void startNap();
     st.idle -= dt;
     if (st.idle <= 0) act();
   };

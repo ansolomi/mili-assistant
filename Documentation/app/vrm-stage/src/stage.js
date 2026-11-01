@@ -32,6 +32,7 @@ export const POSES = {
 const IDLE_POSES = ['relaxed', 'handsBack', 'handsFront', 'relaxed', 'shrug'];
 
 const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (t) => t * t * (3 - 2 * t);
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 
 export class Stage {
@@ -292,7 +293,12 @@ export class Stage {
     const c = this.clips?.[name];
     if (!c || !this.vrm) return Promise.resolve(false);
     this.mixer ??= new THREE.AnimationMixer(this.vrm.scene);
-    if (!c.clip || c.vrm !== this.vrm) { c.clip = createVRMAnimationClip(c.va, this.vrm); c.vrm = this.vrm; }
+    if (!c.clip || c.vrm !== this.vrm) {
+      c.clip = createVRMAnimationClip(c.va, this.vrm);
+      // dances from other rigs carry hip heights that sink her below the window: keep the rotations, drop the hip translation
+      if (name.startsWith('dance_')) c.clip.tracks = c.clip.tracks.filter((t) => !t.name.endsWith('.position'));
+      c.vrm = this.vrm;
+    }
     const next = this.mixer.clipAction(c.clip);
     next.reset();
     next.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
@@ -459,6 +465,12 @@ export class Stage {
     this.poseT = seconds;
   }
 
+  // timed procedural gesture: stretch, yawn, shy, sleepy, earPerk
+  perform(name, seconds = { stretch: 3.4, yawn: 3, shy: 3.6, sleepy: 6, earPerk: 1.6 }[name] ?? 3) {
+    this.fx = { name, t: 0, dur: seconds };
+    return new Promise((ok) => setTimeout(ok, seconds * 1000));
+  }
+
   // ---- cat ears -------------------------------------------------------------
   buildEars() {
     if (this.ears) this.ears.parent?.remove(this.ears);
@@ -578,21 +590,59 @@ export class Stage {
       this.braidSegs?.forEach((sg, i) => (sg.position.x = 0.108 + Math.sin(t * 1.3 - i * 0.5) * 0.003 * i + shift * 0.002 * i));
     }
 
+    // procedural gestures (stretch, yawn, shy, sleepy, earPerk) blend over the idle pose; a playing clip keeps the body
+    const fx = this.fx;
+    let e = 0, fxBlink = 0, fxMouth = 0, fxHead = [0, 0, 0];
+    if (fx) {
+      fx.t += dt;
+      const k = fx.t / fx.dur;
+      if (k >= 1) this.fx = null;
+      else e = smooth(Math.min(1, k / 0.22, (1 - k) / 0.28));
+    }
+    if (fx && e > 0) {
+      const mix = (bone, x, y, z) => { if (bone) bone.rotation.set(lerp(bone.rotation.x, x, e), lerp(bone.rotation.y, y, e), lerp(bone.rotation.z, z, e)); };
+      const body = !this.action;
+      if (fx.name === 'stretch') {
+        if (body) {
+          mix(b.leftUpperArm, -0.1, 0, 1.55); mix(b.rightUpperArm, -0.1, 0, -1.55);
+          mix(b.leftLowerArm, 0, -0.1, 0); mix(b.rightLowerArm, 0, 0.1, 0);
+          b.spine.rotation.x -= 0.14 * e; b.chest.rotation.x -= 0.1 * e;
+          b.hips.position.y += 0.012 * e;
+        }
+        fxHead = [-0.25 * e, 0, 0]; fxBlink = 0.85 * e;
+      } else if (fx.name === 'yawn') {
+        if (body) { b.leftShoulder.rotation.z += 0.12 * e; b.rightShoulder.rotation.z -= 0.12 * e; b.spine.rotation.x -= 0.06 * e; }
+        fxHead = [-0.2 * e, 0, 0.05 * e]; fxBlink = 0.8 * e; fxMouth = 0.9 * e;
+      } else if (fx.name === 'shy') {
+        if (body) {
+          // hands together in front, fidgeting a little
+          const fid = Math.sin(t * 5) * 0.06;
+          mix(b.leftUpperArm, -0.3, 0, -0.95); mix(b.rightUpperArm, -0.3, 0, 0.95);
+          mix(b.leftLowerArm, 0, 1.35 + fid, 0); mix(b.rightLowerArm, 0, -1.35 - fid, 0);
+        }
+        fxHead = [0.15 * e, 0.38 * e, 0.08 * e]; fxBlink = 0.25 * e;
+      } else if (fx.name === 'sleepy') {
+        if (body) { b.spine.rotation.x += 0.2 * e; b.chest.rotation.x += 0.1 * e; }
+        fxHead = [0.4 * e, Math.sin(t * 0.8) * 0.06 * e, Math.sin(t * 0.6) * 0.08 * e]; fxBlink = (0.65 + 0.15 * Math.sin(t * 1.3)) * e;
+      }
+    }
+    const earWag = fx?.name === 'earPerk' ? Math.sin(t * 34) * 0.16 * e : 0;
+
     // head follows the pointer a little, nods while talking
     const nod = sp * 0.05 * Math.sin(t * 5.3);
     const tilt = Math.sin(t * 0.45) * 0.03 + (this.emotion === 'smirk' ? 0.07 : 0);
     const k = 1 - Math.exp(-dt * 4); // the cursor arrives in steps (10 Hz in the overlay), so ease toward it
     this.look.x += (this.pointer.x - this.look.x) * k;
     this.look.y += (this.pointer.y - this.look.y) * k;
-    b.neck.rotation.set(nod * 0.5, this.look.x * 0.12, tilt * 0.5);
-    b.head.rotation.set(-this.look.y * 0.08 + nod, this.look.x * 0.16 + Math.sin(t * 0.33) * 0.03, tilt);
+    b.neck.rotation.set(nod * 0.5 + fxHead[0] * 0.4, this.look.x * 0.12 + fxHead[1] * 0.4, tilt * 0.5 + fxHead[2] * 0.4);
+    b.head.rotation.set(-this.look.y * 0.08 + nod + fxHead[0] * 0.6, this.look.x * 0.16 + Math.sin(t * 0.33) * 0.03 + fxHead[1] * 0.6, tilt + fxHead[2] * 0.6);
     this.lookTarget.position.set(this.look.x * 0.6, (this.headY ?? 1.4) + this.look.y * 0.35, this.camera.position.z);
 
     // ear twitch
     if (this.ears) {
       const tw = Math.max(0, Math.sin(t * 0.8 + 1)) ** 40;
-      this.earMeshes[0].rotation.z = -(-1) * this.settings.earTilt - tw * 0.18;
-      this.earMeshes[1].rotation.z = -(1) * this.settings.earTilt + tw * 0.1;
+      this.earMeshes[0].rotation.z = -(-1) * this.settings.earTilt - tw * 0.18 + earWag;
+      this.earMeshes[1].rotation.z = -(1) * this.settings.earTilt + tw * 0.1 - earWag;
     }
 
     // expressions (smoothed)
@@ -612,20 +662,20 @@ export class Stage {
     const bl = this.blink;
     bl.next -= dt;
     if (bl.next <= 0 && bl.t < 0) bl.t = 0;
-    let blinkV = 0;
+    let blinkV = fxBlink;
     if (bl.t >= 0) {
       bl.t += dt;
-      blinkV = Math.sin(Math.min(1, bl.t / 0.16) * Math.PI);
+      blinkV = Math.max(fxBlink, Math.sin(Math.min(1, bl.t / 0.16) * Math.PI));
       if (bl.t > 0.16) {
         bl.t = -1;
         bl.next = 1.8 + Math.random() * 4.2;
       }
     }
     em?.setValue('blink', blinkV);
-    this.updateFace(blinkV, this.emo.happy ?? 0, clamp01(voice.level * 5.5));
+    const open = Math.max(fxMouth, clamp01(voice.level * 5.5));
+    this.updateFace(blinkV, this.emo.happy ?? 0, open);
 
     // lip sync: open amount from level, vowel from spectral centroid
-    const open = clamp01(voice.level * 5.5);
     const c = voice.centroid;
     const w = { aa: 0, ih: 0, ou: 0, ee: 0, oh: 0 };
     if (open > 0.02) {
