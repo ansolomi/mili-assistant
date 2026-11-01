@@ -57,6 +57,7 @@ If a step fails, fix the cause (the message says which) and run `setup.ps1` agai
 
 | Do this | Result |
 |---|---|
+| Click the small mic next to her | starts and stops listening, same as Ctrl+Alt+M |
 | Click her | opens a chat box; type and press Enter (Esc closes it) |
 | Press and hold on her, then move | picks her up and carries her; she drops back to the taskbar when you let go |
 | Scroll the wheel over her | makes her bigger or smaller (50 to 160 %, remembered) |
@@ -71,7 +72,7 @@ Her behaviours (walking, looking around, cheering, sitting on the taskbar or on 
 
 ### Claude Code jobs
 
-Mili can hand work to Claude Code and tell you the result in Japanese. Jobs run `claude -p` with **full permissions** in the Obsidian vault folder (`D:\Projects\Alvin's Vault`, override with `MILI_VAULT`) and may work anywhere under its parent folder. Each job also leaves a note in the vault's `Mili jobs` folder. One-time step: sign in with `claude auth login`. A misheard voice command can change files, so voice tasks wait 4 seconds and Ctrl+Alt+C stops them. Details: `Mili Claude Code bridge.md` in the vault.
+Mili can hand work to Claude Code and tell you the result in Japanese. Jobs run `claude -p` with **full permissions** in the Obsidian vault folder (`D:\Projects\Alvin's Vault`, override with `MILI_VAULT`) and may work anywhere under its parent folder. Each job also leaves a note in the vault's `Mili jobs` folder. One-time step: run `powershell -ExecutionPolicy Bypass -File .\claude-login.ps1` to sign in. A misheard voice command can change files, so voice tasks wait 4 seconds and Ctrl+Alt+C stops them. Details: `Mili Claude Code bridge.md` in the vault.
 
 ### Learning from your files
 
