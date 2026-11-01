@@ -122,7 +122,23 @@ export async function startOverlay({ stage, bridge, say }) {
     const r = await fetch('/api/cloud', { method: 'POST', body: JSON.stringify({ task }) }).then((x) => x.json()).catch((e) => ({ ok: false, error: e.message }));
     sendText(r.ok ? '[Task queued in the cloud Claude Code room] Tell me in one short Japanese sentence that it was sent; the answer will be on claude.ai.' : `[Cloud room failed] Tell me briefly in Japanese that it failed. Reason: ${String(r.error).slice(0, 150)}`);
   };
-  bridge.sendText = (t) => { const c = CLOUD.exec(t), m = TYPED.exec(t); if (c) runCloud(c[1]); else if (m) runClaude(m[1]); else sendText(t); };
+  const JARVIS = /^\s*jarvis[\s,、:：.。-]+(.+)$/is; // typed only: "jarvis, <task>" goes to the Jarvis bridge (/note, /ask, /work ...)
+  const runJarvis = async (message) => {
+    say(`Jarvis: ${message}`, 'info');
+    const r = await fetch('/api/jarvis', { method: 'POST', body: JSON.stringify({ message }) }).then((x) => x.json()).catch((e) => ({ error: e.message }));
+    if (r.error) return sendText(`[Jarvis failed] Tell me briefly in Japanese that it failed. Reason: ${String(r.error).slice(0, 150)}`);
+    say(`Jarvis (tier ${r.tier}): ${r.reply.slice(0, 300)}`, 'info');
+    sendText(`[Jarvis answered] Tell me in one or two short Japanese sentences: ${r.reply.slice(0, 300)}`);
+  };
+  bridge.sendText = (t) => { const c = CLOUD.exec(t), j = JARVIS.exec(t), m = TYPED.exec(t); if (c) runCloud(c[1]); else if (j) runJarvis(j[1]); else if (m) runClaude(m[1]); else sendText(t); };
+  // Paste a picture into the chat box: it is saved to the vault and its path is added to the text for claude, / jarvis, tasks.
+  box.addEventListener('paste', async (e) => {
+    const f = [...(e.clipboardData?.files ?? [])].find((x) => x.type.startsWith('image/'));
+    if (!f) return;
+    e.preventDefault();
+    const r = await fetch('/api/image', { method: 'POST', headers: { 'content-type': f.type }, body: f }).then((x) => x.json()).catch(() => ({}));
+    if (r.path) box.value += ` ${r.path} `; else say('Image not saved (png, jpeg, webp, gif up to 15 MB)', 'info');
+  });
   const onUserText = bridge.h.onUserText;
   bridge.h.onUserText = (t) => {
     onUserText?.(t);

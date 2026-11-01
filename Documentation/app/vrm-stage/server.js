@@ -34,6 +34,9 @@ function serveFile(res, file) {
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = decodeURIComponent(url.pathname);
+  // /api/claude runs with full permissions: refuse requests from other websites and rebinding hosts.
+  const self = [`localhost:${port}`, `127.0.0.1:${port}`];
+  if (!self.includes(req.headers.host) || (req.headers.origin && !self.some((s) => req.headers.origin === `http://${s}`))) { res.writeHead(403); return res.end('forbidden'); }
   if (p === '/api/models') return json(res, listDir('models', ['.vrm']));
   if (p === '/api/animations') return json(res, listDir('animations', ['.vrma']).map((f) => f.slice(0, -5)));
   if (p === '/api/backgrounds') return json(res, listDir('backgrounds', ['.png', '.jpg', '.jpeg', '.webp']));
@@ -43,6 +46,25 @@ http.createServer(async (req, res) => {
     let task;
     try { ({ task } = JSON.parse((await body(req)).toString() || '{}')); } catch { return json(res, { error: 'invalid JSON' }, 400); }
     return task ? json(res, claude.start(String(task))) : json(res, { error: 'task required' }, 400);
+  }
+  if (p === '/api/image' && req.method === 'POST') { // pasted picture -> vault, so Claude jobs and Jarvis can Read it
+    const ext = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' }[req.headers['content-type']];
+    const buf = await body(req);
+    if (!ext || !buf.length || buf.length > 15_000_000) return json(res, { error: 'png, jpeg, webp or gif up to 15 MB' }, 400);
+    const dir = path.join(vault, 'Inbox', 'images');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.${ext}`);
+    fs.writeFileSync(file, buf);
+    return json(res, { path: file });
+  }
+  if (p === '/api/jarvis' && req.method === 'POST') { // hand a message to the Jarvis bridge (restricted tools, tiered)
+    let message;
+    try { ({ message } = JSON.parse((await body(req)).toString() || '{}')); } catch { return json(res, { error: 'invalid JSON' }, 400); }
+    if (!message) return json(res, { error: 'message required' }, 400);
+    try {
+      const r = await fetch(process.env.JARVIS_URL ?? 'http://127.0.0.1:8787/ask', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: String(message) }) });
+      return json(res, await r.json(), r.status);
+    } catch (e) { return json(res, { error: `Jarvis bridge not reachable: ${e.message}` }, 502); }
   }
   if (p === '/api/claude/session') return json(res, req.method === 'POST' ? { reset: claude.reset() ?? true } : { id: claude.session(), cwd: vault });
   if (p === '/api/cloud') {

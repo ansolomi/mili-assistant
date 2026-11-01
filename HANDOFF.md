@@ -21,6 +21,12 @@ Git: https://github.com/ansolomi/mili-vtuber (private, branch main). Everything 
 - Cloud: `claude -p msg --cloud <session-id>` queues a task in an existing cloud session (id in `Documentation/data/cloud-session.json`, git-ignored, or env `MILI_CLOUD_SESSION`). Send-only, no reply to her; read it at claude.ai/code. Creating a cloud session is interactive only.
 - Each job leaves a note in `D:\Projects\Alvin's Vault\Mili jobs`. The claude.exe of the store (MSIX) desktop app is found by `findExe()` in `claude.js`.
 
+## Jarvis link and images (v1.6, branch feat/mili-jarvis-link)
+- Typed `jarvis, <task>` in the chat box calls `POST /api/jarvis` in `server.js`, which forwards to the Jarvis bridge (`http://127.0.0.1:8787/ask`, env `JARVIS_URL`). Jarvis is a separate project at `D:\Projects\jarvis-code` (start with `start-jarvis.bat`); vault note `Jarvis.md`. Tier 3 has restricted tools, so it is the safer route than `claude,`.
+- Pasting an image into `#ovChat` uploads it to `POST /api/image`, saved under `<vault>\Inbox\images`, and the path is appended to the text. Only `claude,` and `jarvis, /work` can read it; her local qwen3-vl does not get it.
+- `server.js` now returns 403 when Host or Origin is not localhost/127.0.0.1 on the stage port (a website could previously start full-permission jobs).
+- Checked live: image upload, `/api/jarvis` Tier 1 and Tier 3 (read text out of an uploaded image). Not checked: typing `jarvis,` or pasting in the overlay by hand, the spoken path (none exists).
+
 ## Run and rebuild
 - Start: `start-vtuber.ps1` (Ollama, VOICEVOX, brain, stage, exe). Stop: `stop-vtuber.ps1`.
 - Stage code change: `cd Documentation/app/vrm-stage; npm run build`, then restart the stage server (a changed server.js or claude.js needs a node restart, a rebuilt page needs the overlay reloaded; restarting Mili.exe alone does not restart the server if it is already up).
