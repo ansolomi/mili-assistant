@@ -1,2 +1,4 @@
 # the patch must stay byte-exact or git apply fails on Windows
 *.patch -text
+*.vrma -text
+*.vrm -text
