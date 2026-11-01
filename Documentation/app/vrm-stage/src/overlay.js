@@ -13,7 +13,7 @@ const CLIPS = ['hang', 'sit_down', 'sit', 'sit_up', 'idle_look', 'wave_fast', 'j
 const NAP_AFTER = 10 * 60 * 1000; // no cursor movement, clicks or chat for this long: she dozes off on a ledge
 const pick = (table) => { let r = Math.random() * table.reduce((s, [w]) => s + w, 0); for (const [w, f] of table) if ((r -= w) < 0) return f; return table[0][1]; };
 
-export async function startOverlay({ stage, bridge, say }) {
+export async function startOverlay({ stage, bridge, say, switchModel }) {
   document.body.classList.add('overlay');
   const s = stage.settings;
   s.cameraCoverage = 1.8 * (stage.H / 640); // she stays the same size on screen however big the window is
@@ -168,7 +168,8 @@ export async function startOverlay({ stage, bridge, say }) {
     say(`Jarvis (tier ${r.tier}): ${r.reply.slice(0, 300)}`, 'info');
     sendText(`[Jarvis answered] Tell me in one or two short Japanese sentences: ${r.reply.slice(0, 300)}`);
   };
-  bridge.sendText = (t) => { const c = CLOUD.exec(t), j = JARVIS.exec(t), m = TYPED.exec(t); if (c) runCloud(c[1]); else if (j) runJarvis(j[1]); else if (m) runClaude(m[1]); else sendText(t); };
+  const MODEL = /^\s*model\b[\s,、:：.。-]*(.*)$/is; // typed only: "model, arisa" swaps her look; "model" lists them
+  bridge.sendText = (t) => { const c = CLOUD.exec(t), j = JARVIS.exec(t), m = TYPED.exec(t), md = MODEL.exec(t); if (md) switchModel(md[1].trim()).catch((e) => say(`Model failed: ${e.message}`, 'info')); else if (c) runCloud(c[1]); else if (j) runJarvis(j[1]); else if (m) runClaude(m[1]); else sendText(t); };
   const onUserText = bridge.h.onUserText;
   bridge.h.onUserText = (t) => {
     onUserText?.(t);

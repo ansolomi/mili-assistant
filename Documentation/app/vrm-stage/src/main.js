@@ -102,7 +102,16 @@ if (state.model) await loadModel(state.model).catch((e) => say(`Model failed: ${
 if (!overlayMode) await loadBackground(state.background).catch(() => stage.setBackground(null));
 const clipNames = await api('/api/animations').catch(() => []);
 await stage.loadClips(clipNames);
-const overlayTick = overlayMode ? await startOverlay({ stage, bridge, say }) : null;
+// "model, <part of a name>" in the overlay chat: swap the VRM and remember it for the next start
+const switchModel = async (want) => {
+  const name = want && models.find((m) => m.toLowerCase().includes(want.toLowerCase()));
+  if (!name) return say(`Models: ${models.map((m) => m.replace(/\.vrm$/, '')).join(', ')}`, 'info');
+  await loadModel(name);
+  state.model = name;
+  const cur = await api('/api/settings').catch(() => ({}));
+  await api('/api/settings', { method: 'POST', body: JSON.stringify({ ...cur, model: name }) });
+};
+const overlayTick = overlayMode ? await startOverlay({ stage, bridge, say, switchModel }) : null;
 
 // ---- settings GUI -------------------------------------------------------------------
 const s = stage.settings;
