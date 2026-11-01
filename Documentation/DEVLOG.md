@@ -107,3 +107,7 @@ Overlay controls, a bigger box, voice input and a tray control panel.
 - Nap: after 10 minutes without cursor movement, clicks or chat she sits on a ledge and dozes (sleepy loop); any activity wakes her with a yawn and a stretch (`st.napAfter`, `mili.nap()` to test).
 - Reactions: Claude Code job done = joyful jump, failed = head shake; moods (joy, anger, sadness, surprise, fear) trigger a gesture with a 40 s cooldown and 35% chance.
 - Not used: `lay` and `hanging` (wider than her window); peek, situps, thinking, talking and neutral_idle were tried and dropped. FBX to VRMA conversion was not needed: the MIT `fbx2vrma-converter` and `bvh2vrma` already exist (see the animations README).
+
+## v1.4.1: skirt physics
+
+- Taila has 21 skirt bones (`DEF-skirt*`, single leaf bones under the spine) but no spring bone data, so the skirt was rigid. `Stage.buildSkirtPhysics()` adds `VRMSpringBoneJoint`s to those leaf bones at load (stiffness 0.55, drag 0.35), capsule colliders on both thighs so legs push the skirt aside, and a wind term against the walking direction (she walks in place, so there is no real inertia). Models that bring their own spring bones are left alone. Hair has the same gap (no spring data) and is not touched yet.

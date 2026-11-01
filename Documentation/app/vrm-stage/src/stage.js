@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+import { VRMLoaderPlugin, VRMUtils, VRMSpringBoneManager, VRMSpringBoneJoint, VRMSpringBoneCollider, VRMSpringBoneColliderShapeCapsule } from '@pixiv/three-vrm';
 import { VRMAnimationLoaderPlugin, createVRMAnimationClip } from '@pixiv/three-vrm-animation';
 
 // Emotion tag -> VRM expression weights. Indices match emotionMap of "vrm_stage" in Open-LLM-VTuber/model_dict.json.
@@ -171,9 +171,37 @@ export class Stage {
     this.buildEars();
     this.buildParts();
     this.buildFace();
+    this.buildSkirtPhysics();
     this.relaxHands();
     this.frameCamera();
     return { expressions: Object.keys(vrm.expressionManager?.expressionMap ?? {}), hair: this.hairMats.map((m) => m.name), meta: vrm.meta?.name };
+  }
+
+  // Models without spring bone data (Taila) have a rigid skirt: give its leaf bones spring joints, let the thighs push it
+  // out of the way, and blow it against the walking direction (she walks in place, the window moves, so there is no real inertia)
+  buildSkirtPhysics() {
+    const vrm = this.vrm;
+    this.skirtJoints = [];
+    if (vrm.springBoneManager) return; // the model brings its own
+    const bones = [];
+    vrm.scene.traverse((o) => { if (/skirt/i.test(o.name) && o.parent && !o.children.length) bones.push(o); });
+    if (!bones.length) return;
+    const groups = [];
+    for (const side of ['left', 'right']) {
+      const up = vrm.humanoid.getRawBoneNode(`${side}UpperLeg`), low = vrm.humanoid.getRawBoneNode(`${side}LowerLeg`);
+      if (!up || !low) continue;
+      const c = new VRMSpringBoneCollider(new VRMSpringBoneColliderShapeCapsule({ radius: 0.09, tail: low.position.clone() }));
+      up.add(c);
+      groups.push({ colliders: [c] });
+    }
+    const mgr = new VRMSpringBoneManager();
+    for (const bone of bones) {
+      const j = new VRMSpringBoneJoint(bone, null, { hitRadius: 0.025, stiffness: 0.55, dragForce: 0.35, gravityPower: 0 }, groups);
+      mgr.addJoint(j);
+      this.skirtJoints.push(j);
+    }
+    mgr.setInitState();
+    vrm.springBoneManager = mgr;
   }
 
   frameCamera() {
@@ -687,6 +715,13 @@ export class Stage {
     for (const k of Object.keys(w)) {
       this.mouth[k] = lerp(this.mouth[k], w[k] * open, 1 - Math.exp(-dt * 22));
       em?.setValue(k, this.mouth[k] * 0.85);
+    }
+
+    // skirt wind: against the walking direction (world x), a little more while she bobs
+    const wk = this.walkAmt ?? 0, wd = this.walkDir || Math.sign(this.facing) || 0;
+    for (const j of this.skirtJoints ?? []) {
+      j.settings.gravityDir.set(-wd, -0.25, 0).normalize();
+      j.settings.gravityPower = 0.22 * wk;
     }
 
     vrm.update(dt);
