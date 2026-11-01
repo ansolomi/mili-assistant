@@ -21,9 +21,12 @@ function findExe() {
   return found[0]?.f ?? null;
 }
 
-export function makeClaude({ cwd, addDir, notes }) {
+export function makeClaude({ cwd, addDir, notes, sessionFile }) {
   const jobs = [];
-  let session = null; // follow-ups ("now run the tests") resume the last finished job
+  // Her "room": every job resumes one session, kept across restarts, so she remembers earlier tasks. Open it yourself with `claude --resume <id>` from the vault folder.
+  let session = null;
+  try { session = JSON.parse(fs.readFileSync(sessionFile, 'utf8')).id ?? null; } catch { /* first run */ }
+  const setSession = (id) => { session = id; try { fs.writeFileSync(sessionFile, JSON.stringify({ id })); } catch { /* kept in memory only */ } };
 
   const view = (j) => ({ id: j.id, task: j.task, status: j.status, step: j.step, result: j.result, mili: j.mili, started: j.started, ended: j.ended, cost: j.cost });
 
@@ -38,7 +41,7 @@ export function makeClaude({ cwd, addDir, notes }) {
     let buf = '', err = '';
     const onEvent = (e) => {
       if (e.type === 'assistant') for (const c of e.message?.content ?? []) if (c.type === 'tool_use') j.step = `${c.name} ${JSON.stringify(c.input).slice(0, 80)}`;
-      if (e.type === 'result') { j.result = e.result; j.cost = e.total_cost_usd; j.error = e.is_error; if (!e.is_error) session = e.session_id; }
+      if (e.type === 'result') { j.result = e.result; j.cost = e.total_cost_usd; j.error = e.is_error; if (!e.is_error) setSession(e.session_id); }
     };
     p.stdout.on('data', (d) => { buf += d; const lines = buf.split('\n'); buf = lines.pop(); for (const l of lines) try { onEvent(JSON.parse(l)); } catch { /* not json */ } });
     p.stderr.on('data', (d) => { err += d; });
@@ -64,5 +67,5 @@ export function makeClaude({ cwd, addDir, notes }) {
     return n;
   }
 
-  return { start, cancel, list: () => jobs.map(view) };
+  return { start, cancel, list: () => jobs.map(view), session: () => session, reset: () => setSession(null) };
 }

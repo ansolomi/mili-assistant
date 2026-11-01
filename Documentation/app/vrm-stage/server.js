@@ -17,7 +17,8 @@ const learner = makeLearner(data);
 setTimeout(() => learner.run(), 60_000); // gentle background pass shortly after start, then hourly
 setInterval(() => learner.run(), 3_600_000);
 const vault = process.env.MILI_VAULT ?? "D:\\Projects\\Alvin's Vault";
-const claude = makeClaude({ cwd: vault, addDir: path.dirname(vault), notes: path.join(vault, 'Mili jobs') });
+const claude = makeClaude({ cwd: vault, addDir: path.dirname(vault), notes: path.join(vault, 'Mili jobs'), sessionFile: path.join(data, 'claude-session.json') });
+const inbox = []; // things other sessions asked her to say; the overlay drains it
 const settingsFile = path.join(data, 'stage-settings.json');
 
 const listDir = (sub, exts) => (fs.existsSync(path.join(data, sub)) ? fs.readdirSync(path.join(data, sub)).filter((f) => exts.includes(path.extname(f).toLowerCase())) : []);
@@ -43,6 +44,15 @@ http.createServer(async (req, res) => {
     try { ({ task } = JSON.parse((await body(req)).toString() || '{}')); } catch { return json(res, { error: 'invalid JSON' }, 400); }
     return task ? json(res, claude.start(String(task))) : json(res, { error: 'task required' }, 400);
   }
+  if (p === '/api/claude/session') return json(res, req.method === 'POST' ? { reset: claude.reset() ?? true } : { id: claude.session(), cwd: vault });
+  if (p === '/api/say' && req.method === 'POST') { // localhost only (the server listens on 127.0.0.1)
+    let text;
+    try { ({ text } = JSON.parse((await body(req)).toString() || '{}')); } catch { return json(res, { error: 'invalid JSON' }, 400); }
+    if (!text) return json(res, { error: 'text required' }, 400);
+    inbox.push(String(text).slice(0, 500));
+    return json(res, { queued: inbox.length });
+  }
+  if (p === '/api/inbox') return json(res, inbox.splice(0));
   if (p === '/api/claude/cancel' && req.method === 'POST') return json(res, { cancelled: claude.cancel(Number(url.searchParams.get('id')) || 0) });
   if (p === '/api/settings') {
     if (req.method === 'POST') { fs.writeFileSync(settingsFile, await body(req)); return json(res, { ok: true }); }

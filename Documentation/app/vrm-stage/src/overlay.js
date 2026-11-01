@@ -130,6 +130,9 @@ export async function startOverlay({ stage, bridge, say }) {
   ov.on('claude-cancel', cancelClaude);
   const told = new Set();
   let first = true;
+  setInterval(async () => { // other sessions can make her speak: POST /api/say {"text": ...}
+    for (const t of await fetch('/api/inbox').then((x) => x.json()).catch(() => [])) { say(`Message: ${t}`, 'info'); sendText(`[Message from another Claude Code session] Tell me in one or two short Japanese sentences: ${t}`); }
+  }, 2000);
   setInterval(async () => {
     const jobs = await fetch('/api/claude').then((x) => x.json()).catch(() => null);
     if (!jobs) return;

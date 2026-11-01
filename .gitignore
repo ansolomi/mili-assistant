@@ -17,3 +17,4 @@ Documentation/data/recordings/
 
 # private: summaries of the user's own files and chat
 Documentation/data/knowledge/
+Documentation/data/claude-session.json

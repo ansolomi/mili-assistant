@@ -117,3 +117,8 @@ Seated, the thigh still cut through the skirt hem because the skirt bones sit ri
 
 ## v1.4.3 headpat (stage page)
 On the non-overlay stage page, stroking the cursor back and forth over her head (about 350 px of travel inside a head-sized circle, 5 s cooldown) makes her go shy, wag her ears and show a short subtitle. See `headpat` in `src/main.js`. Not in the overlay: there a long hover would clash with click to chat and drag. Origin: job 3 of the Claude Code bridge asked which "room" was meant and stopped.
+
+## v1.5 rooms and a reverse channel
+- Her jobs all resume one Claude Code session (her "room"). The id is kept in `Documentation/data/claude-session.json` (git-ignored), so she remembers earlier tasks across restarts. `GET /api/claude/session` returns the id and folder, `POST /api/claude/session` forgets it (next job starts a fresh room). Open the room yourself with `claude --resume <id>` from the vault folder. Checked with two jobs: the second recalled a codeword from the first.
+- Reverse channel: any local program or Claude Code session can make her speak with `POST http://localhost:8765/api/say {"text": "..."}`. The overlay drains `/api/inbox` every 2 s and she says it in Japanese through the LLM. Localhost only.
+- Cloud: `claude --cloud <description>` exists in Claude Code 2.1.309 but is not wired up or tested (it would create a cloud session on the account).
