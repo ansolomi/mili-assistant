@@ -1,0 +1,420 @@
+diff --git a/mcp_servers.json b/mcp_servers.json
+index 31b9698..f267b58 100644
+--- a/mcp_servers.json
++++ b/mcp_servers.json
+@@ -2,7 +2,7 @@
+     "mcp_servers": {
+       "time": {
+         "command": "uvx",
+-        "args": ["mcp-server-time", "--local-timezone=Asia/Shanghai"]
++        "args": ["mcp-server-time", "--local-timezone=Asia/Bangkok"]
+       },
+       "ddg-search": {
+         "command": "uvx",
+diff --git a/model_dict.json b/model_dict.json
+index e7682cf..68e32fa 100644
+--- a/model_dict.json
++++ b/model_dict.json
+@@ -1,30 +1,51 @@
+ [
+-    {
+-        "name": "mao_pro",
+-        "description": "",
+-        "url": "/live2d-models/mao_pro/runtime/mao_pro.model3.json",
+-        "kScale": 0.5,
+-        "initialXshift": 0,
+-        "initialYshift": 0,
+-        "kXOffset": 1150,
+-        "idleMotionGroupName": "Idle",
+-        "emotionMap": {
+-            "neutral": 0,
+-            "anger": 2,
+-            "disgust": 2,
+-            "fear": 1,
+-            "joy": 3,
+-            "smirk": 3,
+-            "sadness": 1,
+-            "surprise": 3
+-        },
+-        "tapMotions": {
+-            "HitAreaHead": {
+-                "": 1
+-            },
+-            "HitAreaBody": {
+-                "": 1
+-            }
+-        }
++  {
++    "name": "mao_pro",
++    "description": "",
++    "url": "/live2d-models/mao_pro/runtime/mao_pro.model3.json",
++    "kScale": 0.5,
++    "initialXshift": 0,
++    "initialYshift": 0,
++    "kXOffset": 1150,
++    "idleMotionGroupName": "Idle",
++    "emotionMap": {
++      "neutral": 0,
++      "anger": 2,
++      "disgust": 2,
++      "fear": 1,
++      "joy": 3,
++      "smirk": 3,
++      "sadness": 1,
++      "surprise": 3
++    },
++    "tapMotions": {
++      "HitAreaHead": {
++        "": 1
++      },
++      "HitAreaBody": {
++        "": 1
++      }
+     }
++  },
++  {
++    "name": "vrm_stage",
++    "description": "3D VRM stage (Documentation/app/vrm-stage). Indices map to EMOTION_BY_INDEX in stage.js.",
++    "url": "/live2d-models/mao_pro/runtime/mao_pro.model3.json",
++    "kScale": 0.5,
++    "initialXshift": 0,
++    "initialYshift": 0,
++    "kXOffset": 1150,
++    "idleMotionGroupName": "Idle",
++    "emotionMap": {
++      "neutral": 0,
++      "joy": 1,
++      "anger": 2,
++      "sadness": 3,
++      "surprise": 4,
++      "fear": 5,
++      "disgust": 6,
++      "smirk": 7
++    },
++    "tapMotions": {}
++  }
+ ]
+\ No newline at end of file
+diff --git a/run_server.py b/run_server.py
+index 510ca20..98793d8 100644
+--- a/run_server.py
++++ b/run_server.py
+@@ -161,6 +161,8 @@ def run(console_log_level: str):
+         host=server_config.host,
+         port=server_config.port,
+         log_level=console_log_level.lower(),
++        # The legacy websockets impl asserts on concurrent drains when sending large (WAV) audio payloads
++        ws="websockets-sansio",
+     )
+ 
+ 
+diff --git a/src/open_llm_vtuber/asr/sherpa_onnx_asr.py b/src/open_llm_vtuber/asr/sherpa_onnx_asr.py
+index b9a1d5c..ea11b84 100644
+--- a/src/open_llm_vtuber/asr/sherpa_onnx_asr.py
++++ b/src/open_llm_vtuber/asr/sherpa_onnx_asr.py
+@@ -38,8 +38,10 @@ class VoiceRecognition(ASRInterface):
+         sample_rate: int = 16000,  # Sample rate
+         feature_dim: int = 80,  # Feature dimension
+         use_itn: bool = True,  # Use ITN for SenseVoice models
++        language: str = "",  # SenseVoice language (zh/en/ja/ko/yue), empty = auto-detect
+         provider: str = "cpu",  # Provider for inference (cpu or cuda)
+     ) -> None:
++        self.language = language
+         self.model_type = model_type
+         self.encoder = encoder
+         self.decoder = decoder
+@@ -194,6 +196,7 @@ class VoiceRecognition(ASRInterface):
+                 tokens=self.tokens,
+                 num_threads=self.num_threads,
+                 use_itn=self.use_itn,
++                language=self.language,
+                 debug=self.debug,
+                 provider=self.provider,
+             )
+diff --git a/src/open_llm_vtuber/config_manager/asr.py b/src/open_llm_vtuber/config_manager/asr.py
+index d70ea6c..f9b3f34 100644
+--- a/src/open_llm_vtuber/config_manager/asr.py
++++ b/src/open_llm_vtuber/config_manager/asr.py
+@@ -209,6 +209,7 @@ class SherpaOnnxASRConfig(I18nMixin):
+     tokens: str = Field(..., alias="tokens")
+     num_threads: int = Field(4, alias="num_threads")
+     use_itn: bool = Field(True, alias="use_itn")
++    language: str = Field("", alias="language")  # SenseVoice: zh/en/ja/ko/yue, "" = auto
+     provider: Literal["cpu", "cuda", "rocm"] = Field("cpu", alias="provider")
+ 
+     DESCRIPTIONS: ClassVar[Dict[str, Description]] = {
+diff --git a/src/open_llm_vtuber/config_manager/tts.py b/src/open_llm_vtuber/config_manager/tts.py
+index 9822bff..927865f 100644
+--- a/src/open_llm_vtuber/config_manager/tts.py
++++ b/src/open_llm_vtuber/config_manager/tts.py
+@@ -160,6 +160,26 @@ class EdgeTTSConfig(I18nMixin):
+     }
+ 
+ 
++class VoicevoxTTSConfig(I18nMixin):
++    """Configuration for VOICEVOX engine (Japanese only)."""
++
++    url: str = Field("http://127.0.0.1:50021", alias="url")
++    speaker: int = Field(8, alias="speaker")
++    speed: float = Field(1.0, alias="speed")
++    pitch: float = Field(0.0, alias="pitch")
++    intonation: float = Field(1.0, alias="intonation")
++
++    DESCRIPTIONS: ClassVar[Dict[str, Description]] = {
++        "url": Description(en="VOICEVOX engine URL", zh="VOICEVOX 引擎地址"),
++        "speaker": Description(
++            en="Speaker/style id (see GET /speakers)", zh="说话人/风格 ID"
++        ),
++        "speed": Description(en="Speech speed scale", zh="语速"),
++        "pitch": Description(en="Pitch scale", zh="音高"),
++        "intonation": Description(en="Intonation scale", zh="语调"),
++    }
++
++
+ class CosyvoiceTTSConfig(I18nMixin):
+     """Configuration for Cosyvoice TTS."""
+ 
+@@ -362,9 +382,16 @@ class CoquiTTSConfig(I18nMixin):
+ class SherpaOnnxTTSConfig(I18nMixin):
+     """Configuration for Sherpa Onnx TTS."""
+ 
+-    vits_model: str = Field(..., alias="vits_model")
++    vits_model: str = Field("", alias="vits_model")
+     vits_lexicon: Optional[str] = Field(None, alias="vits_lexicon")
+-    vits_tokens: str = Field(..., alias="vits_tokens")
++    vits_tokens: str = Field("", alias="vits_tokens")
++    # Kokoro mode: set kokoro_model (with tokens/voices/data_dir) instead of the vits_* fields
++    kokoro_model: str = Field("", alias="kokoro_model")
++    kokoro_voices: str = Field("", alias="kokoro_voices")
++    kokoro_tokens: str = Field("", alias="kokoro_tokens")
++    kokoro_data_dir: str = Field("", alias="kokoro_data_dir")
++    kokoro_dict_dir: str = Field("", alias="kokoro_dict_dir")
++    kokoro_lexicon: str = Field("", alias="kokoro_lexicon")
+     vits_data_dir: Optional[str] = Field(None, alias="vits_data_dir")
+     vits_dict_dir: Optional[str] = Field(None, alias="vits_dict_dir")
+     tts_rule_fsts: Optional[str] = Field(None, alias="tts_rule_fsts")
+@@ -702,6 +729,7 @@ class TTSConfig(I18nMixin):
+         "elevenlabs_tts",
+         "cartesia_tts",
+         "piper_tts",
++        "voicevox_tts",
+     ] = Field(..., alias="tts_model")
+ 
+     azure_tts: Optional[AzureTTSConfig] = Field(None, alias="azure_tts")
+@@ -726,6 +754,7 @@ class TTSConfig(I18nMixin):
+     elevenlabs_tts: ElevenLabsTTSConfig | None = Field(None, alias="elevenlabs_tts")
+     cartesia_tts: CartesiaTTSConfig | None = Field(None, alias="cartesia_tts")
+     piper_tts: Optional[PiperTTSConfig] = Field(None, alias="piper_tts")
++    voicevox_tts: Optional[VoicevoxTTSConfig] = Field(None, alias="voicevox_tts")
+ 
+     DESCRIPTIONS: ClassVar[Dict[str, Description]] = {
+         "tts_model": Description(
+diff --git a/src/open_llm_vtuber/conversations/single_conversation.py b/src/open_llm_vtuber/conversations/single_conversation.py
+index 493fa9c..519738e 100644
+--- a/src/open_llm_vtuber/conversations/single_conversation.py
++++ b/src/open_llm_vtuber/conversations/single_conversation.py
+@@ -165,7 +165,7 @@ async def process_single_conversation(
+         logger.info(f"🤡👍 Conversation {session_emoji} cancelled because interrupted.")
+         raise
+     except Exception as e:
+-        logger.error(f"Error in conversation chain: {e}")
++        logger.exception(f"Error in conversation chain: {e!r}")
+         await websocket_send(
+             json.dumps({"type": "error", "message": f"Conversation error: {str(e)}"})
+         )
+diff --git a/src/open_llm_vtuber/service_context.py b/src/open_llm_vtuber/service_context.py
+index e73dd4a..c39ebe8 100644
+--- a/src/open_llm_vtuber/service_context.py
++++ b/src/open_llm_vtuber/service_context.py
+@@ -1,5 +1,6 @@
+ import os
+ import json
++from datetime import datetime
+ from typing import Callable
+ from loguru import logger
+ from fastapi import WebSocket
+@@ -464,6 +465,34 @@ class ServiceContext:
+ 
+             persona_prompt += prompt_content
+ 
++        # Fixed at connection time; the model has no clock, so state the start time and its limits
++        now = datetime.now().astimezone()
++        persona_prompt += (
++            "\n\nCurrent local date and time when this conversation started: "
++            f"{now:%A, %d %B %Y, %H:%M} (UTC{now:%z}). "
++            "Use it to answer questions about the date or time, and remember that time has passed "
++            "since if the conversation has been going on for a while.\n"
++        )
++
++        # What she learned by reading the user's files, and her evolving personality notes (written by the stage's learn.js)
++        kdir = os.path.join("..", "Documentation", "data", "knowledge")
++        for fname, title in (
++            ("digest.md", "What you know about the user and their files (from reading them yourself)"),
++            ("personality.md", "How your personality has grown with this user"),
++        ):
++            kpath = os.path.join(kdir, fname)
++            if os.path.exists(kpath):
++                with open(kpath, encoding="utf-8") as f:
++                    kt = f.read().strip()
++                if kt:
++                    persona_prompt += f"\n\n{title}:\n{kt}\n"
++
++        # Optional last-word instructions (e.g. reply language); they only stick when placed after the tool prompts
++        final_path = os.path.join("prompts", "final_instructions.txt")
++        if os.path.exists(final_path):
++            with open(final_path, encoding="utf-8") as f:
++                persona_prompt += f.read()
++
+         logger.debug("\n === System Prompt ===")
+         logger.debug(persona_prompt)
+ 
+diff --git a/src/open_llm_vtuber/tts/sherpa_onnx_tts.py b/src/open_llm_vtuber/tts/sherpa_onnx_tts.py
+index 6b2f666..f4d2024 100644
+--- a/src/open_llm_vtuber/tts/sherpa_onnx_tts.py
++++ b/src/open_llm_vtuber/tts/sherpa_onnx_tts.py
+@@ -13,7 +13,7 @@ sys.path.append(current_dir)
+ class TTSEngine(TTSInterface):
+     def __init__(
+         self,
+-        vits_model,
++        vits_model="",
+         vits_lexicon="",
+         vits_tokens="",
+         vits_data_dir="",
+@@ -25,7 +25,19 @@ class TTSEngine(TTSInterface):
+         num_threads=1,
+         speed=1.0,
+         debug=False,
++        kokoro_model="",
++        kokoro_voices="",
++        kokoro_tokens="",
++        kokoro_data_dir="",
++        kokoro_dict_dir="",
++        kokoro_lexicon="",
+     ):
++        self.kokoro_model = kokoro_model
++        self.kokoro_voices = kokoro_voices
++        self.kokoro_tokens = kokoro_tokens
++        self.kokoro_data_dir = kokoro_data_dir
++        self.kokoro_dict_dir = kokoro_dict_dir
++        self.kokoro_lexicon = kokoro_lexicon
+         self.vits_model = vits_model
+         self.vits_lexicon = vits_lexicon
+         self.vits_tokens = vits_tokens
+@@ -52,20 +64,35 @@ class TTSEngine(TTSInterface):
+         Initialize the sherpa-onnx TTS engine.
+         """
+         # Construct the configuration for the TTS engine
+-        tts_config = sherpa_onnx.OfflineTtsConfig(
+-            model=sherpa_onnx.OfflineTtsModelConfig(
+-                vits=sherpa_onnx.OfflineTtsVitsModelConfig(
++        if self.kokoro_model:
++            model_kwargs = {
++                "kokoro": sherpa_onnx.OfflineTtsKokoroModelConfig(
++                    model=self.kokoro_model,
++                    voices=self.kokoro_voices,
++                    tokens=self.kokoro_tokens,
++                    data_dir=self.kokoro_data_dir,
++                    dict_dir=self.kokoro_dict_dir,
++                    lexicon=self.kokoro_lexicon,
++                )
++            }
++        else:
++            model_kwargs = {
++                "vits": sherpa_onnx.OfflineTtsVitsModelConfig(
+                     model=self.vits_model,
+                     lexicon=self.vits_lexicon,
+                     data_dir=self.vits_data_dir,
+                     dict_dir=self.vits_dict_dir,
+                     tokens=self.vits_tokens,
+-                ),
++                )
++            }
++        tts_config = sherpa_onnx.OfflineTtsConfig(
++            model=sherpa_onnx.OfflineTtsModelConfig(
++                **model_kwargs,
+                 provider=self.provider,
+                 debug=self.debug,
+                 num_threads=self.num_threads,
+             ),
+-            rule_fsts=self.tts_rule_fsts,
++            rule_fsts=self.tts_rule_fsts or "",
+             max_num_sentences=self.max_num_sentences,
+         )
+ 
+diff --git a/src/open_llm_vtuber/tts/tts_factory.py b/src/open_llm_vtuber/tts/tts_factory.py
+index 1fd5f50..aef0539 100644
+--- a/src/open_llm_vtuber/tts/tts_factory.py
++++ b/src/open_llm_vtuber/tts/tts_factory.py
+@@ -23,6 +23,16 @@ class TTSFactory:
+             from .edge_tts import TTSEngine as EdgeTTSEngine
+ 
+             return EdgeTTSEngine(kwargs.get("voice"))
++        elif engine_type == "voicevox_tts":
++            from .voicevox_tts import TTSEngine as VoicevoxTTSEngine
++
++            return VoicevoxTTSEngine(
++                kwargs.get("url"),
++                kwargs.get("speaker"),
++                kwargs.get("speed"),
++                kwargs.get("pitch"),
++                kwargs.get("intonation"),
++            )
+         elif engine_type == "pyttsx3_tts":
+             from .pyttsx3_tts import TTSEngine as Pyttsx3TTSEngine
+ 
+diff --git a/src/open_llm_vtuber/tts/voicevox_tts.py b/src/open_llm_vtuber/tts/voicevox_tts.py
+new file mode 100644
+index 0000000..c5aa150
+--- /dev/null
++++ b/src/open_llm_vtuber/tts/voicevox_tts.py
+@@ -0,0 +1,49 @@
++import requests
++from loguru import logger
++from .tts_interface import TTSInterface
++
++
++# VOICEVOX engine (https://github.com/VOICEVOX/voicevox_engine): /audio_query then /synthesis, Japanese only.
++# Speaker ids: GET {url}/speakers
++class TTSEngine(TTSInterface):
++    def __init__(
++        self,
++        url="http://127.0.0.1:50021",
++        speaker=8,
++        speed=1.0,
++        pitch=0.0,
++        intonation=1.0,
++    ):
++        self.url = url.rstrip("/")
++        self.speaker = speaker
++        self.params = {
++            "speedScale": speed,
++            "pitchScale": pitch,
++            "intonationScale": intonation,
++        }
++        self.file_extension = "wav"
++        self.new_audio_dir = "cache"
++
++    def generate_audio(self, text, file_name_no_ext=None):
++        file_name = self.generate_cache_file_name(file_name_no_ext, self.file_extension)
++        try:
++            q = requests.post(
++                f"{self.url}/audio_query",
++                params={"text": text, "speaker": self.speaker},
++                timeout=30,
++            )
++            q.raise_for_status()
++            query = {**q.json(), **self.params}
++            r = requests.post(
++                f"{self.url}/synthesis",
++                params={"speaker": self.speaker},
++                json=query,
++                timeout=120,
++            )
++            r.raise_for_status()
++        except Exception as e:
++            logger.critical(f"VOICEVOX unable to generate audio (is the engine running on {self.url}?): {e}")
++            return None
++        with open(file_name, "wb") as f:
++            f.write(r.content)
++        return file_name

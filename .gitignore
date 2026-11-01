@@ -1,0 +1,19 @@
+# build output and dependencies
+Mili/
+node_modules/
+dist/
+downloads/
+logs/
+Documentation/logs/
+*.log
+
+# upstream clone: tracked as Open-LLM-VTuber.patch instead
+Open-LLM-VTuber/
+
+# large downloads (see Documentation/README.md to fetch them again)
+Documentation/data/voicevox/
+Documentation/data/source/
+Documentation/data/recordings/
+
+# private: summaries of the user's own files and chat
+Documentation/data/knowledge/
