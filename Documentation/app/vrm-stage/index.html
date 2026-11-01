@@ -40,6 +40,7 @@
     #ovFiles { display: flex; flex-wrap: wrap; gap: 6px; } #ovFiles:empty { display: none; }
     #ovFiles span { background: #232c3d; border: 1px solid var(--line); border-radius: 999px; padding: 2px 6px 2px 10px; font-size: 12px; color: var(--text); }
     #ovFiles b { cursor: pointer; margin-left: 6px; opacity: 0.7; }
+    #ovModel { background: #232c3d; color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px; font: inherit; }
     #ovBar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #9aa7bd; } #ovBar i { flex: 1; font-style: normal; }
     body.clean aside, body.clean .lil-gui, body.clean #badge, body.clean #audioHint { display: none; }
   </style>
@@ -63,7 +64,7 @@
   <div id="ovPane">
     <div id="ovFiles"></div>
     <textarea id="ovChat" placeholder="Say something... (Enter sends, Shift+Enter adds a line). Drop or paste files to give them to Jarvis." autocomplete="off"></textarea>
-    <div id="ovBar"><button id="ovAttach" title="Attach files for Jarvis">Attach</button><i>images, pdf, docx, txt, md, csv, json</i><button id="ovSend" class="primary">Send</button></div>
+    <div id="ovBar"><button id="ovAttach" title="Attach files for Jarvis">Attach</button><select id="ovModel" title="Which model she uses"></select><i>images, pdf, docx, txt, md, csv, json</i><button id="ovSend" class="primary">Send</button></div>
     <input id="ovFile" type="file" multiple hidden />
   </div>
   <script type="module" src="/src/main.js"></script>

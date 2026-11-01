@@ -144,6 +144,7 @@ export class Stage {
     VRMUtils.removeUnnecessaryVertices(gltf.scene);
     VRMUtils.combineSkeletons(gltf.scene);
     VRMUtils.rotateVRM0(vrm);
+    this.baseYaw = vrm.scene.rotation.y; // PI for VRM 0.x models, which face -Z; the turn-to-walk lerp must keep it
     vrm.scene.traverse((o) => (o.frustumCulled = false));
     this.scene.add(vrm.scene);
     this.vrm = vrm;
@@ -598,7 +599,7 @@ export class Stage {
       const wk = (this.walkAmt = lerp(this.walkAmt, this.walkDir ? 1 : 0, 1 - Math.exp(-dt * 6)));
       if (this.walkDir) this.facing = this.walkDir * 1.1;
       else if (wk < 0.05) this.facing = 0;
-      vrm.scene.rotation.y = lerp(vrm.scene.rotation.y, this.facing, 1 - Math.exp(-dt * 5));
+      vrm.scene.rotation.y = lerp(vrm.scene.rotation.y, this.facing + (this.baseYaw ?? 0),1 - Math.exp(-dt * 5));
       this.walkPhase += dt * 6.5 * wk;
       const sw = Math.sin(this.walkPhase) * wk;
       const kn = Math.cos(this.walkPhase) * wk;

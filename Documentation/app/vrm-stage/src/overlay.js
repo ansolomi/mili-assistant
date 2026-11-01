@@ -13,7 +13,7 @@ const CLIPS = ['hang', 'sit_down', 'sit', 'sit_up', 'idle_look', 'wave_fast', 'j
 const NAP_AFTER = 10 * 60 * 1000; // no cursor movement, clicks or chat for this long: she dozes off on a ledge
 const pick = (table) => { let r = Math.random() * table.reduce((s, [w]) => s + w, 0); for (const [w, f] of table) if ((r -= w) < 0) return f; return table[0][1]; };
 
-export async function startOverlay({ stage, bridge, say, switchModel }) {
+export async function startOverlay({ stage, bridge, say, switchModel, models, state }) {
   document.body.classList.add('overlay');
   const s = stage.settings;
   s.cameraCoverage = 1.8 * (stage.H / 640); // she stays the same size on screen however big the window is
@@ -42,7 +42,11 @@ export async function startOverlay({ stage, bridge, say, switchModel }) {
       s.append(x); return s;
     }));
   };
+  const pick = document.getElementById('ovModel');
+  pick.replaceChildren(...models.map((m) => new Option(m.replace(/\.vrm$/, ''), m)));
+  pick.onchange = () => switchModel(pick.value).catch((e) => say(`Model failed: ${e.message}`, 'info')).finally(() => box.focus());
   const setChat = (on) => {
+    pick.value = state.model;
     st.chat = on; st.lastActive = performance.now();
     pane.style.display = on ? 'flex' : 'none';
     if (on) { ov.focus(); setTimeout(() => box.focus(), 150); } // the window takes focus asynchronously

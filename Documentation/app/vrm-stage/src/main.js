@@ -111,7 +111,7 @@ const switchModel = async (want) => {
   const cur = await api('/api/settings').catch(() => ({}));
   await api('/api/settings', { method: 'POST', body: JSON.stringify({ ...cur, model: name }) });
 };
-const overlayTick = overlayMode ? await startOverlay({ stage, bridge, say, switchModel }) : null;
+const overlayTick = overlayMode ? await startOverlay({ stage, bridge, say, switchModel, models, state }) : null;
 
 // ---- settings GUI -------------------------------------------------------------------
 const s = stage.settings;
