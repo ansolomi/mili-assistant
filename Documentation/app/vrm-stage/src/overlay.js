@@ -53,14 +53,14 @@ export async function startOverlay({ stage, bridge, say, switchModel, models, st
     else { box.value = ''; files = []; drawChips(); }
     ov.ignore(!(on || st.over));
   };
-  // Attachments go to Jarvis: with files and no trigger word the message becomes "jarvis, /work <text> <paths>".
+  // Attachments go to Jarvis: with files and no trigger word the message becomes "mili, /work <text> <paths>".
   const compose = () => {
     const text = box.value.trim();
     if (!files.length) return text;
     if (TYPED.test(text)) return `${text} Attached files: ${files.map((f) => `"${f}"`).join(' ')}`; // an explicit claude, task keeps its route
     const m = JARVIS.exec(text);
     const task = (m ? m[1] : text) || 'Look at the attached files and tell me what they are.';
-    return `jarvis, ${/^\//.test(task) ? task : '/work ' + task} Attached files: ${files.map((f) => `"${f}"`).join(' ')}`;
+    return `mili, ${/^\//.test(task) ? task : '/work ' + task} Attached files: ${files.map((f) => `"${f}"`).join(' ')}`;
   };
   const send = () => {
     if (!box.value.trim() && !files.length) return;
@@ -165,7 +165,7 @@ export async function startOverlay({ stage, bridge, say, switchModel, models, st
     const r = await fetch('/api/cloud', { method: 'POST', body: JSON.stringify({ task }) }).then((x) => x.json()).catch((e) => ({ ok: false, error: e.message }));
     sendText(r.ok ? '[Task queued in the cloud Claude Code room] Tell me in one short Japanese sentence that it was sent; the answer will be on claude.ai.' : `[Cloud room failed] Tell me briefly in Japanese that it failed. Reason: ${String(r.error).slice(0, 150)}`);
   };
-  const JARVIS = /^\s*jarvis[\s,、:：.。-]+(.+)$/is; // typed only: "jarvis, <task>" goes to the Jarvis bridge (/note, /ask, /work ...)
+  const JARVIS = /^\s*(?:mili|milli|jarvis)[\s,、:：.。-]+(.+)$/is; // typed only: "mili, <task>" (or "jarvis, ...") goes to the Jarvis bridge (/note, /ask, /work ...)
   const runJarvis = async (message) => {
     say(`Jarvis: ${message}`, 'info');
     const r = await fetch('/api/jarvis', { method: 'POST', body: JSON.stringify({ message }) }).then((x) => x.json()).catch((e) => ({ error: e.message }));

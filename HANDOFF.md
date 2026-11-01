@@ -1,4 +1,4 @@
-# Handoff: Mili (vtuber-assistant)
+﻿# Handoff: Mili (vtuber-assistant)
 
 Date: 2026-11-01. Written so a new session can continue from this file. History is in `Documentation/DEVLOG.md`, install steps in `README.md`, the vault note is `D:\Projects\Alvin's Vault\Mili.md` and `Mili Claude Code bridge.md`.
 
@@ -22,10 +22,14 @@ Git: https://github.com/ansolomi/mili-vtuber (private, branch main). Everything 
 - Each job leaves a note in `D:\Projects\Alvin's Vault\Mili jobs`. The claude.exe of the store (MSIX) desktop app is found by `findExe()` in `claude.js`.
 
 ## Jarvis link and images (v1.6, branch feat/mili-jarvis-link)
-- Typed `jarvis, <task>` in the chat box calls `POST /api/jarvis` in `server.js`, which forwards to the Jarvis bridge (`http://127.0.0.1:8787/ask`, env `JARVIS_URL`). Jarvis is a separate project at `D:\Projects\jarvis-code` (start with `start-jarvis.bat`); vault note `Jarvis.md`. Tier 3 has restricted tools, so it is the safer route than `claude,`.
-- Pasting an image into `#ovChat` uploads it to `POST /api/image`, saved under `<vault>\Inbox\images`, and the path is appended to the text. Only `claude,` and `jarvis, /work` can read it; her local qwen3-vl does not get it.
+- Typed `mili, <task>` (also `milli,` and `jarvis,`) in the chat box calls `POST /api/jarvis` in `server.js`, which forwards to the Jarvis bridge (`http://127.0.0.1:8787/ask`, env `JARVIS_URL`). Jarvis is a separate project at `D:\Projects\jarvis-code` (start with `start-jarvis.bat`); vault note `Jarvis.md`. Tier 3 has restricted tools, so it is the safer route than `claude,`.
+- Pasting an image into `#ovChat` uploads it to `POST /api/image`, saved under `<vault>\Inbox\images`, and the path is appended to the text. Only `claude,` and `mili, /work` can read it; her local qwen3-vl does not get it.
 - `server.js` now returns 403 when Host or Origin is not localhost/127.0.0.1 on the stage port (a website could previously start full-permission jobs).
 - Checked live: image upload, `/api/jarvis` Tier 1 and Tier 3 (read text out of an uploaded image). Not checked: typing `jarvis,` or pasting in the overlay by hand, the spoken path (none exists).
+
+- Chat pane (v1.7): multi-line card with Attach, Close, Send and a model dropdown. Files dropped, pasted or attached are saved by `POST /api/upload` under `<vault>\Inbox\images|files` and sent as `mili, /work <text> Attached files: "<paths>"`. `start-vtuber.ps1` now starts the Jarvis bridge too (`JARVIS_DIR`, default D:\Projects\jarvis-code).
+- Models: `model` lists, `model, <name>` swaps (or use the dropdown); saved in stage-settings. VRM 0.x models (Arisa) use a mirrored bone frame, handled in `stage.js` (`baseYaw`, `flipBones`). Plana (KK rig) converted with `tools/kk_export.py` + `tools/kk2vrm.mjs`.
+- Taila physics: `tools/taila_rig.mjs` turns the 21 loose skirt bones into 7 chains of 3 and writes VRMC_springBone (skirt, all hair chains, thigh/hip/head colliders). Originals are in `data/source/taila/pre-physics/`. Sleeves and the cape have no bones of their own, so they are still rigid.
 
 ## Run and rebuild
 - Start: `start-vtuber.ps1` (Ollama, VOICEVOX, brain, stage, exe). Stop: `stop-vtuber.ps1`.
@@ -54,3 +58,4 @@ Git: https://github.com/ansolomi/mili-vtuber (private, branch main). Everything 
 - Whether to keep the project private (animation licences).
 - Whether to move her brain to the 14B.
 - Whether the cloud room should ever get a reply channel.
+

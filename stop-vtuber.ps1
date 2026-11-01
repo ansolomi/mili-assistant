@@ -5,7 +5,7 @@ $profile = Join-Path $PSScriptRoot 'Documentation\data\edge-profile'
 Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object { $_.CommandLine -like "*$profile*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 Get-Process Mili, electron -ErrorAction SilentlyContinue | Stop-Process -Force
 Get-Process open-llm-vtuber-electron -ErrorAction SilentlyContinue | Stop-Process -Force
-foreach ($port in 8765, 12393, 50021) {
+foreach ($port in 8765, 12393, 50021, 8787) {
     $c = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
     if ($c) { Stop-Process -Id $c.OwningProcess -Force }
 }

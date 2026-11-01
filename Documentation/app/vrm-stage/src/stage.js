@@ -185,7 +185,15 @@ export class Stage {
   buildSkirtPhysics() {
     const vrm = this.vrm;
     this.skirtJoints = [];
-    if (vrm.springBoneManager) return; // the model brings its own
+    this.skirtRoots = []; // the first bone of each chain: the one the thigh push is applied to
+    if (vrm.springBoneManager) { // the model brings its own (Taila: tools/taila_rig.mjs); wind and leg push still reach its skirt chains
+      for (const j of vrm.springBoneManager.joints) {
+        if (!/skirt/i.test(j.bone.name)) continue;
+        this.skirtJoints.push(j);
+        if (!/skirt/i.test(j.bone.parent?.name ?? '')) this.skirtRoots.push(j);
+      }
+      return;
+    }
     const bones = [];
     vrm.scene.traverse((o) => { if (/skirt/i.test(o.name) && o.parent && !o.children.length) bones.push(o); });
     if (!bones.length) return;
@@ -202,6 +210,7 @@ export class Stage {
       const j = new VRMSpringBoneJoint(bone, null, { hitRadius: 0.025, stiffness: 0.55, dragForce: 0.35, gravityPower: 0 }, groups);
       mgr.addJoint(j);
       this.skirtJoints.push(j);
+      this.skirtRoots.push(j);
     }
     mgr.setInitState();
     vrm.springBoneManager = mgr;
@@ -739,7 +748,7 @@ export class Stage {
   // The skirt bones are rigid under the pelvis, so a thigh swung forward (sitting, stepping) cuts through the hem. After the
   // spring step, rotate each skirt bone about its own origin by a share of the nearby thigh's swing (world-space delta).
   skirtFollowLegs() {
-    const joints = this.skirtJoints;
+    const joints = this.skirtRoots;
     if (!joints?.length) return;
     const B = this.bones, k = this.skirtFollow ?? { gain: 0.8, reach: 0.16 };
     const Qh = B.hips.getWorldQuaternion(_qa);

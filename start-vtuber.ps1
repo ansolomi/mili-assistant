@@ -45,6 +45,15 @@ if (-not (Test-Url 'http://localhost:8765/api/models')) {
     if (-not (Wait-Url 'http://localhost:8765/api/models' 30)) { throw 'Stage server did not start' }
 }
 
+# 3b. Jarvis bridge (what "mili, <task>" in her chat box talks to). Optional: skipped when the project folder is missing.
+$jarvis = if ($env:JARVIS_DIR) { $env:JARVIS_DIR } else { 'D:\Projects\jarvis-code' }
+if ((Test-Path (Join-Path $jarvis 'bridge\package.json')) -and -not (Test-Url 'http://127.0.0.1:8787/')) {
+    if (-not $env:VAULT_PATH) { $env:VAULT_PATH = "D:\Projects\Alvin's Vault" }
+    Start-Process cmd -ArgumentList '/c', 'npm start' -WorkingDirectory (Join-Path $jarvis 'bridge') -WindowStyle Hidden `
+        -RedirectStandardOutput (Join-Path $logs 'jarvis.out.log') -RedirectStandardError (Join-Path $logs 'jarvis.err.log')
+    if (-not (Wait-Url 'http://127.0.0.1:8787/' 30)) { Write-Warning 'Jarvis bridge did not start; "mili, ..." will report it as unreachable.' }
+}
+
 # 4. Desktop overlay (Electron), or the stage in an Edge app window with its own profile (keeps the mic permission, allows autoplay)
 if (-not $NoWindow -and -not $StageWindow) {
     $exe = Join-Path $PSScriptRoot 'Mili\Mili-win32-x64\Mili.exe'
