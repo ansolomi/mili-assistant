@@ -28,7 +28,7 @@ Git: https://github.com/ansolomi/mili-vtuber (private, branch main). Everything 
 - Checked live: image upload, `/api/jarvis` Tier 1 and Tier 3 (read text out of an uploaded image). Not checked: typing `jarvis,` or pasting in the overlay by hand, the spoken path (none exists).
 
 - Chat pane (v1.7): multi-line card with Attach, Close, Send and a model dropdown. Files dropped, pasted or attached are saved by `POST /api/upload` under `<vault>\Inbox\images|files` and sent as `mili, /work <text> Attached files: "<paths>"`. `start-vtuber.ps1` now starts the Jarvis bridge too (`JARVIS_DIR`, default D:\Projects\jarvis-code).
-- Models: `model` lists, `model, <name>` swaps (or use the dropdown); saved in stage-settings. VRM 0.x models (Arisa) use a mirrored bone frame, handled in `stage.js` (`baseYaw`, `flipBones`). Plana (KK rig) converted with `tools/kk_export.py` + `tools/kk2vrm.mjs`.
+- Models: `model` lists, `model, <name>` swaps (or use the dropdown); saved in stage-settings. VRM 0.x models (Arisa) use a mirrored bone frame, handled in `stage.js` (`baseYaw`, `flipBones`). `tools/kk2vrm.mjs` turns a GLB from a Koikatsu (KKBP) Rigify rig into a VRM; it was proven on one such model, which was then removed.
 - Taila physics: `tools/taila_rig.mjs` turns the 21 loose skirt bones into 7 chains of 3 and writes VRMC_springBone (skirt, all hair chains, thigh/hip/head colliders). Originals are in `data/source/taila/pre-physics/`. Sleeves and the cape have no bones of their own, so they are still rigid.
 
 ## Run and rebuild
@@ -58,4 +58,5 @@ Git: https://github.com/ansolomi/mili-vtuber (private, branch main). Everything 
 - Whether to keep the project private (animation licences).
 - Whether to move her brain to the 14B.
 - Whether the cloud room should ever get a reply channel.
+
 

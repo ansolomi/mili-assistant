@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import * as THREE from 'three';
 
-const [, , inPath, outPath, modelName = 'Plana'] = process.argv;
+const [, , inPath, outPath, modelName = 'Model'] = process.argv;
 const buf = fs.readFileSync(inPath);
 const jsonLen = buf.readUInt32LE(12);
 const json = JSON.parse(buf.subarray(20, 20 + jsonLen).toString('utf8'));
