@@ -1,6 +1,6 @@
 // File explorer: reads text files from chosen folders, has the local model summarise them, and keeps
 //   data/knowledge/notes.json       per-file summary + facts about the user
-//   data/knowledge/digest.md        compact knowledge digest (injected into her system prompt by the brain)
+//   data/knowledge/digest.md        compact knowledge digest (injected into her system prompt by the brain); starts with the hand-written notes in data/pinned/*.md
 //   data/knowledge/personality.md   evolving personality notes, rewritten after each pass
 // Folders and limits live in data/knowledge/config.json (created on first run, edit freely).
 import fs from 'node:fs';
@@ -82,12 +82,18 @@ export function makeLearner(dataDir) {
     return true;
   }
 
+  // Hand-written knowledge that always goes into the digest: every .md file in data/pinned (kept short, it uses her prompt space).
+  function pinnedText() {
+    const d = path.join(dataDir, 'pinned');
+    try { return fs.readdirSync(d).filter((n) => n.endsWith('.md')).map((n) => fs.readFileSync(path.join(d, n), 'utf8').trim().slice(0, 1500)).join('\n\n') + '\n\n'; } catch { return ''; }
+  }
+
   async function rebuild(notes, learnedNew) {
     const entries = Object.entries(notes).filter(([, n]) => n.summary).sort((a, b) => b[1].mtime - a[1].mtime);
     const facts = [...new Set(entries.flatMap(([, n]) => n.facts).map((x) => x.trim()).filter(Boolean))].slice(0, 30);
     const lines = entries.slice(0, 20).map(([p, n]) => `- ${path.basename(p)} (${path.basename(path.dirname(p))}): ${n.summary}`);
     const digest = `${facts.length ? `Things you have learned about the user from their files:\n${facts.map((x) => `- ${x}`).join('\n')}\n\n` : ''}Files you have read recently:\n${lines.join('\n')}\n`;
-    fs.writeFileSync(f('digest.md'), digest.slice(0, 3800));
+    fs.writeFileSync(f('digest.md'), `${pinnedText()}${digest.slice(0, 3800)}`);
     if (!learnedNew) return;
     const old = fs.existsSync(f('personality.md')) ? fs.readFileSync(f('personality.md'), 'utf8') : '';
     try {
