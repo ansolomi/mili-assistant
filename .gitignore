@@ -19,3 +19,5 @@ Documentation/data/recordings/
 Documentation/data/knowledge/
 Documentation/data/claude-session.json
 Documentation/data/cloud-session.json
+Documentation/data/security.json
+Documentation/data/reminders.json

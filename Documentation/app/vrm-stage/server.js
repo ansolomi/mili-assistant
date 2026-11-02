@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { makeLearner } from './learn.js';
 import { makeClaude } from './claude.js';
+import { makePc, PRESETS } from './pc.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dist = path.join(here, 'dist');
@@ -19,6 +20,7 @@ setInterval(() => learner.run(), 3_600_000);
 const vault = process.env.MILI_VAULT ?? "D:\\Projects\\Alvin's Vault";
 const claude = makeClaude({ cwd: vault, addDir: path.dirname(vault), notes: path.join(vault, 'Mili jobs'), sessionFile: path.join(data, 'claude-session.json'), cloudFile: path.join(data, 'cloud-session.json') });
 const inbox = []; // things other sessions asked her to say; the overlay drains it
+const pc = makePc(data, (t) => inbox.push(t));
 const settingsFile = path.join(data, 'stage-settings.json');
 
 const listDir = (sub, exts) => (fs.existsSync(path.join(data, sub)) ? fs.readdirSync(path.join(data, sub)).filter((f) => exts.includes(path.extname(f).toLowerCase())) : []);
@@ -85,6 +87,36 @@ http.createServer(async (req, res) => {
     if (!text) return json(res, { error: 'text required' }, 400);
     inbox.push(String(text).slice(0, 500));
     return json(res, { queued: inbox.length });
+  }
+  if (p === '/api/security') { // GET the switches; POST {preset} or {switch, on}
+    if (req.method === 'POST') {
+      let b;
+      try { b = JSON.parse((await body(req)).toString() || '{}'); } catch { return json(res, { error: 'invalid JSON' }, 400); }
+      const ok = b.preset in PRESETS ? pc.setPreset(b.preset) : pc.setSwitch(Number(b.switch), b.on);
+      if (!ok) return json(res, { error: 'unknown preset or locked switch' }, 400);
+    }
+    return json(res, pc.security());
+  }
+  if (p === '/api/pc' && req.method === 'POST') {
+    let b;
+    try { b = JSON.parse((await body(req)).toString() || '{}'); } catch { return json(res, { error: 'invalid JSON' }, 400); }
+    return json(res, await pc.act(b));
+  }
+  if (p === '/api/pc/confirm' && req.method === 'POST') {
+    let b;
+    try { b = JSON.parse((await body(req)).toString() || '{}'); } catch { return json(res, { error: 'invalid JSON' }, 400); }
+    return json(res, await pc.confirm(Number(b.id) || pc.lastAsk(), !!b.yes));
+  }
+  if (p === '/api/reminders') {
+    if (req.method === 'POST') {
+      let b;
+      try { b = JSON.parse((await body(req)).toString() || '{}'); } catch { return json(res, { error: 'invalid JSON' }, 400); }
+      if (b.text && b.due) pc.addReminder(b.text, Number(b.due));
+      else if ('remove' in b) pc.removeReminder(Number(b.remove) || 0);
+      else if (b.routine) pc.setRoutine(b.routine, b.steps);
+      else return json(res, { error: 'text+due, remove, or routine+steps' }, 400);
+    }
+    return json(res, pc.state());
   }
   if (p === '/api/inbox') return json(res, inbox.splice(0));
   if (p === '/api/claude/cancel' && req.method === 'POST') return json(res, { cancelled: claude.cancel(Number(url.searchParams.get('id')) || 0) });

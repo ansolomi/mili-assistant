@@ -1,6 +1,7 @@
 // Desktop overlay mode (?overlay=1 inside the Electron window): transparent stage that lives on the desktop.
 // She walks along the taskbar, looks around, greets the cursor, perches on the taskbar edge or on the top edge of
 // the foreground window (VRMA clips), reacts to clicks with a chat box, and shows what the file explorer is reading.
+import { parse, parseWhen, paysWords, amendment } from './commands.js';
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const sleep = (s) => new Promise((ok) => setTimeout(ok, s * 1000));
 const SPEED = 60; // px per second
@@ -157,8 +158,12 @@ export async function startOverlay({ stage, bridge, say, switchModel, models, st
   const SPOKEN = /^\s*(?:(?:hey|ok|okay)[\s,]+(?:claude|cloud|clod|claud)|クロード)[\s,、:：.。-]+(.+)$/is;
   let pending = null;
   const cancelClaude = () => { if (pending) { clearTimeout(pending); pending = null; say('Cancelled', 'info'); } fetch('/api/claude/cancel', { method: 'POST' }); };
-  const runClaude = (task) => fetch('/api/claude', { method: 'POST', body: JSON.stringify({ task }) }).then(() => say(`Claude Code: ${task}`, 'info'));
+  const startClaude = (task) => fetch('/api/claude', { method: 'POST', body: JSON.stringify({ task }) }).then(() => say(`Claude Code: ${task}`, 'info'));
   const sendText = bridge.sendText.bind(bridge);
+  // Paying is never automatic, whatever the security preset: a job whose text sounds like spending money waits for a yes.
+  let payAsk = null, pcAsk = 0, running = [];
+  const ask = (q) => say(q, 'info');
+  const runClaude = (task) => { if (paysWords(task)) { payAsk = () => startClaude(task); return ask(`This sounds like it involves paying: "${task.slice(0, 80)}". Allow it? (yes / no)`); } startClaude(task); };
   const CLOUD = /^\s*cloud[\s,、:：.。-]+(.+)$/is; // typed only: "cloud, <task>" queues it in the cloud room
   const runCloud = async (task) => {
     say(`Cloud room: ${task}`, 'info');
@@ -166,20 +171,75 @@ export async function startOverlay({ stage, bridge, say, switchModel, models, st
     sendText(r.ok ? '[Task queued in the cloud Claude Code room] Tell me in one short Japanese sentence that it was sent; the answer will be on claude.ai.' : `[Cloud room failed] Tell me briefly in Japanese that it failed. Reason: ${String(r.error).slice(0, 150)}`);
   };
   const JARVIS = /^\s*(?:mili|milli|jarvis)[\s,、:：.。-]+(.+)$/is; // typed only: "mili, <task>" (or "jarvis, ...") goes to the Jarvis bridge (/note, /ask, /work ...)
-  const runJarvis = async (message) => {
+  const runJarvis = async (message, paid) => {
+    if (!paid && paysWords(message)) { payAsk = () => runJarvis(message, true); return ask(`This sounds like it involves paying: "${message.slice(0, 80)}". Allow it? (yes / no)`); }
     say(`Jarvis: ${message}`, 'info');
     const r = await fetch('/api/jarvis', { method: 'POST', body: JSON.stringify({ message }) }).then((x) => x.json()).catch((e) => ({ error: e.message }));
     if (r.error) return sendText(`[Jarvis failed] Tell me briefly in Japanese that it failed. Reason: ${String(r.error).slice(0, 150)}`);
     say(`Jarvis (tier ${r.tier}): ${r.reply.slice(0, 300)}`, 'info');
     sendText(`[Jarvis answered] Tell me in one or two short Japanese sentences: ${r.reply.slice(0, 300)}`);
   };
+  // ---- PC commands (reminders, routines, security, quick actions) and asides while a job runs ----
+  const api = (path, body) => fetch(path, body ? { method: 'POST', body: JSON.stringify(body) } : undefined).then((x) => x.json()).catch((e) => ({ error: e.message }));
+  let routines = [];
+  const refresh = () => api('/api/reminders').then((r) => { routines = r.routines ?? routines; return r; });
+  refresh();
+  const pcDo = async (body) => {
+    const r = await api('/api/pc', body);
+    if (r.ask) { pcAsk = r.id; return ask(r.ask); }
+    say(r.ok ? `Done: ${r.msg || body.action}` : `Couldn't: ${r.msg || r.error}`, 'info');
+  };
+  const handle = async (text, depth = 0) => {
+    const c = parse(text, routines);
+    if (!c) return false;
+    if (c.kind === 'yes' || c.kind === 'no') {
+      const yes = c.kind === 'yes';
+      if (payAsk) { const f = payAsk; payAsk = null; if (yes) f(); else say('Ok, cancelled', 'info'); return true; }
+      if (!pcAsk) return false;
+      const id = pcAsk; pcAsk = 0;
+      const r = await api('/api/pc/confirm', { id, yes });
+      say(r.ok ? `Done: ${r.msg}` : r.msg ?? 'cancelled', 'info');
+      return true;
+    }
+    if (c.kind === 'stop' || c.kind === 'status') { // asides: only mean something while a job is running
+      if (!running.length) return false;
+      if (c.kind === 'stop') { cancelClaude(); return true; }
+      const j = running[0];
+      say(`Working on "${j.task.slice(0, 60)}" for ${Math.round((Date.now() - j.started) / 1000)} s. Now: ${j.step}`, 'info');
+      return true;
+    }
+    if (c.kind === 'remind') {
+      const due = parseWhen(c.when);
+      if (!due) { say("I couldn't read that time.", 'info'); return true; }
+      await api('/api/reminders', { text: c.text, due });
+      say(`Reminder set for ${new Date(due).toLocaleString([], { hour: '2-digit', minute: '2-digit', weekday: 'short' })}: ${c.text}`, 'info');
+      return true;
+    }
+    if (c.kind === 'reminders') { const r = await refresh(); say(r.reminders?.length ? r.reminders.map((x) => `${new Date(x.due).toLocaleString([], { hour: '2-digit', minute: '2-digit', weekday: 'short' })}: ${x.text}`).join(' | ') : 'No reminders.', 'info'); return true; }
+    if (c.kind === 'forget-reminders') { for (const x of (await refresh()).reminders ?? []) await api('/api/reminders', { remove: x.id }); say('Reminders cleared', 'info'); return true; }
+    if (c.kind === 'routine-save') { await api('/api/reminders', { routine: c.name, steps: c.steps }); await refresh(); say(`Routine saved: say "${c.name}" to run it`, 'info'); return true; }
+    if (c.kind === 'routine-forget') { await api('/api/reminders', { routine: c.name }); await refresh(); say('Routine forgotten', 'info'); return true; }
+    if (c.kind === 'routines') { await refresh(); say(routines.length ? routines.map((r) => `${r.name}: ${r.steps}`).join(' | ') : 'No routines yet. Try: routine focus: open code; volume 20', 'info'); return true; }
+    if (c.kind === 'routine-run') {
+      if (depth) return true; // a routine cannot start another routine
+      for (const step of routines.find((r) => r.name === c.name).steps.split(';').map((x) => x.trim()).filter(Boolean)) if (!(await handle(step, 1))) say(`Routine step not understood: ${step}`, 'info');
+      return true;
+    }
+    if (c.kind === 'security') { const r = await api('/api/security'); say(`Security: ${r.preset}. On: ${r.switches.filter((x) => x.on).map((x) => x.name).join(', ') || 'nothing'}. Paying always asks.`, 'info'); return true; }
+    if (c.kind === 'security-set') { await api('/api/security', { preset: c.preset }); say(`Security preset: ${c.preset}${c.preset === 'blackwall' ? ' (everything on except paying, which still asks)' : ''}`, 'info'); return true; }
+    if (c.kind === 'security-switch') { const r = await api('/api/security', { switch: c.index, on: c.on }); say(r.error ? r.error : `Security is now ${r.preset}`, 'info'); return true; }
+    if (c.kind === 'pc') { await pcDo(c.body); return true; }
+    return false;
+  };
+  setInterval(async () => { const jobs = await api('/api/claude'); if (Array.isArray(jobs)) running = jobs.filter((j) => j.status === 'running'); }, 2000);
   const MODEL = /^\s*model\b[\s,、:：.。-]*(.*)$/is; // typed only: "model, arisa" swaps her look; "model" lists them
-  bridge.sendText = (t) => { const c = CLOUD.exec(t), j = JARVIS.exec(t), m = TYPED.exec(t), md = MODEL.exec(t); if (md) switchModel(md[1].trim()).catch((e) => say(`Model failed: ${e.message}`, 'info')); else if (c) runCloud(c[1]); else if (j) runJarvis(j[1]); else if (m) runClaude(m[1]); else sendText(t); };
+  bridge.sendText = (t) => { if (running.length && !payAsk && !pcAsk && amendment(t) && !CLOUD.test(t) && !JARVIS.test(t)) { const j = running[0]; cancelClaude(); runClaude(`${j.task}. Change of plan: ${t}`); return; } handle(t).then((done) => { if (!done) route(t); }); };
+  const route = (t) => { const c = CLOUD.exec(t), j = JARVIS.exec(t), m = TYPED.exec(t), md = MODEL.exec(t); if (md) switchModel(md[1].trim()).catch((e) => say(`Model failed: ${e.message}`, 'info')); else if (c) runCloud(c[1]); else if (j) runJarvis(j[1]); else if (m) runClaude(m[1]); else sendText(t); };
   const onUserText = bridge.h.onUserText;
   bridge.h.onUserText = (t) => {
     onUserText?.(t);
     const m = SPOKEN.exec(t);
-    if (!m) return;
+    if (!m) { parse(t, routines) && handle(t).then((done) => done && bridge.interrupt()); return; }
     bridge.interrupt(); // the brain already started answering the transcript
     say(`Sending to Claude Code in 4 s (Ctrl+Alt+C cancels): ${m[1]}`, 'info');
     clearTimeout(pending);
