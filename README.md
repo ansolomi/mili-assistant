@@ -78,6 +78,16 @@ Mili can hand work to Claude Code and tell you the result in Japanese. Jobs run 
 
 About a minute after start, then hourly, she reads text files in the folders listed in `Documentation/data/knowledge/config.json` (created on first run: Desktop, Documents, `D:\Projects`; edit to taste) and builds `digest.md` and `personality.md` next to it. These go into her prompt at the next connection. Files with credential-like names are skipped. To make her forget, delete the `.md` and `notes.json` files in that folder. Use the panel's **Explore my files now** to trigger a pass.
 
+## PC control (type or say these)
+
+- **Reminders and routines:** `remind me in 10 minutes to stretch`, `remind me to call mum at 5pm`, `reminders`; `routine focus: open code; volume 20`, then just say `focus`.
+- **Quick actions:** `open spotify`, `go to example.com`, `play`, `pause`, `next`, `mute`, `volume 30`, `louder`, `take a screenshot`, `switch to chrome`, `close notepad`, `lock`, `sleep`.
+- **Security:** `security` shows the switches, `security lockdown|guarded|trusted|blackwall` picks a preset (default blackwall: everything on). When a switch is off she asks first (answer `yes` or `no`). **Paying always asks**, in every preset, and shutdown/restart always ask.
+- **Asides while a Claude job runs:** `stop`, `status`, or `actually ...` to change the task.
+- **Care nudges:** eyes, stretch, water, late-night and meal reminders while you are at the PC; `care off` / `care on`.
+- **Files and screen:** `find <words>` then `open result N`; `what do you see`; `watch for <something>`; `watch along`; `stop watching`; `screen, <task>` lets her click and type through the local vision model (Ctrl+Alt+C stops her). Screenshots go only to the local Ollama model.
+- Restart Mili after updating so the stage server picks this up. State is in `Documentation/data/security.json` and `reminders.json` (git-ignored).
+
 ## Settings you may want to change
 
 | Setting | Where |
@@ -142,4 +152,5 @@ Not in git (created by `setup.ps1` or at run time): `Open-LLM-VTuber/` (upstream
 - Voice: [VOICEVOX](https://voicevox.hiroshiba.jp/) engine, speaker もち子さん by default. If you publish audio, credit the character as the VOICEVOX terms require, for example `VOICEVOX:もち子(cv 明日葉よもぎ)`, and check the terms of any other voice you pick.
 - Animations: VRMA clips from the Hikari archive, see `Documentation/data/animations/LICENSE-hikari-archive.txt`.
 - Avatars in `Documentation/data/models`: Taila is a user-supplied model; Seed-san and Twist-sample are VRoid and VRM samples. Check each model's own licence before redistributing it, and keep this repository private unless you have.
+- PC control ideas (permission presets, reminders and routines, care nudges, lookout, computer-use loop) follow [Capri Desktop](https://github.com/lachydotmcg/capri-desktop) by lachydotmcg (PolyForm Noncommercial 1.0.0). No Capri code is copied.
 - LLM: Qwen3-VL through Ollama. Speech recognition: SenseVoice through sherpa-onnx.

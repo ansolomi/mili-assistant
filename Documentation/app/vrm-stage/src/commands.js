@@ -55,6 +55,14 @@ export function parse(text, routines = []) {
   }
   if (/^(stop|cancel|abort|nevermind|never mind|stop (it|that|this|everything|working))$/i.test(t)) return { kind: 'stop' };
   if (/^(status|progress|what are you (doing|up to)|how'?s it going|are you (done|finished)( yet)?|what'?s taking so long)\??$/i.test(t)) return { kind: 'status' };
+  // screen: look, lookout, watch-along, computer use; file finder
+  if (/^(what do you see|what'?s on (my|the) screen|look at (my|the) screen|what am i (looking at|doing))\??$/i.test(t)) return { kind: 'look' };
+  if ((m = /^watch (?:for|until)\s+(.+)$/i.exec(t))) return { kind: 'watch', condition: m[1] };
+  if (/^watch (this )?(along|with me)$/i.test(t)) return { kind: 'along' };
+  if (/^stop watching$/i.test(t)) return { kind: 'watch-stop' };
+  if ((m = /^(?:screen|computer)\s*[,:]\s*(.+)$/i.exec(t)) || (m = /^use the (?:computer|mouse) to\s+(.+)$/i.exec(t))) return { kind: 'gui', task: m[1] };
+  if ((m = /^open (?:result|number|file)\s+(\d)$/i.exec(t))) return { kind: 'open-result', n: Number(m[1]) };
+  if ((m = /^(?:find|locate|where is|where'?s)\s+(?:my |the )?(.+?)(?: file)?\??$/i.exec(t)) && !/^routine/i.test(m[1])) return { kind: 'find', words: m[1] };
   // quick PC actions (each is gated by the server)
   if ((m = /^(?:open|launch|start)\s+(?!routine\b)(.+)$/i.exec(t))) return { kind: 'pc', body: { action: 'open', target: m[1].replace(/^(the|my)\s+/i, '') } };
   if ((m = /^go to\s+(\S+\.\S+)$/i.exec(t))) return { kind: 'pc', body: { action: 'open', target: m[1] } };
@@ -101,6 +109,11 @@ if (typeof process !== 'undefined' && process.argv[1]?.endsWith('commands.js')) 
   assert.equal(parse('shut down').body.what, 'shutdown');
   assert.equal(parse('take a screenshot').body.name, 'screenshot');
   assert.equal(parse('yes').kind, 'yes');
+  assert.equal(parse('watch for the download to finish').condition, 'the download to finish');
+  assert.equal(parse('screen, open the calculator').task, 'open the calculator');
+  assert.equal(parse('where is my cv file').words, 'cv');
+  assert.equal(parse('open result 2').n, 2);
+  assert.equal(parse('stop watching').kind, 'watch-stop');
   assert.equal(parse('how is the weather today'), null);
   assert.ok(paysWords('book a flight') && !paysWords('open a notebook'));
   console.log('commands ok');

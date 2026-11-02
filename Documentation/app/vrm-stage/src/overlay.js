@@ -158,11 +158,11 @@ export async function startOverlay({ stage, bridge, say, switchModel, models, st
   const TYPED = /^\s*(?:(?:hey|ok|okay)[\s,]+)?(?:claude|クロード)[\s,、:：.。-]+(.+)$/is;
   const SPOKEN = /^\s*(?:(?:hey|ok|okay)[\s,]+(?:claude|cloud|clod|claud)|クロード)[\s,、:：.。-]+(.+)$/is;
   let pending = null;
-  const cancelClaude = () => { if (pending) { clearTimeout(pending); pending = null; say('Cancelled', 'info'); } fetch('/api/claude/cancel', { method: 'POST' }); };
+  const cancelClaude = () => { if (pending) { clearTimeout(pending); pending = null; say('Cancelled', 'info'); } fetch('/api/claude/cancel', { method: 'POST' }); fetch('/api/eyes', { method: 'POST', body: JSON.stringify({ op: 'stop' }) }); };
   const startClaude = (task) => fetch('/api/claude', { method: 'POST', body: JSON.stringify({ task }) }).then(() => say(`Claude Code: ${task}`, 'info'));
   const sendText = bridge.sendText.bind(bridge);
   // Paying is never automatic, whatever the security preset: a job whose text sounds like spending money waits for a yes.
-  let payAsk = null, pcAsk = 0, running = [];
+  let payAsk = null, pcAsk = 0, guiAsk = false, running = [], found = [];
   const ask = (q) => say(q, 'info');
   const runClaude = (task) => { if (paysWords(task)) { payAsk = () => startClaude(task); return ask(`This sounds like it involves paying: "${task.slice(0, 80)}". Allow it? (yes / no)`); } startClaude(task); };
   const CLOUD = /^\s*cloud[\s,、:：.。-]+(.+)$/is; // typed only: "cloud, <task>" queues it in the cloud room
@@ -190,12 +190,14 @@ export async function startOverlay({ stage, bridge, say, switchModel, models, st
     if (r.ask) { pcAsk = r.id; return ask(r.ask); }
     say(r.ok ? `Done: ${r.msg || body.action}` : `Couldn't: ${r.msg || r.error}`, 'info');
   };
+  const guiStart = async (task) => { const r = await api('/api/eyes', { op: 'gui', task }); if (r.ask) { pcAsk = r.id; return ask(r.ask); } say(r.ok ? `Screen task: ${task}. ${r.msg}` : r.msg ?? r.error, 'info'); };
   const handle = async (text, depth = 0) => {
     const c = parse(text, routines);
     if (!c) return false;
     if (c.kind === 'yes' || c.kind === 'no') {
       const yes = c.kind === 'yes';
       if (payAsk) { const f = payAsk; payAsk = null; if (yes) f(); else say('Ok, cancelled', 'info'); return true; }
+      if (guiAsk) { guiAsk = false; await api('/api/eyes', { op: 'answer', yes }); return true; }
       if (!pcAsk) return false;
       const id = pcAsk; pcAsk = 0;
       const r = await api('/api/pc/confirm', { id, yes });
@@ -203,6 +205,7 @@ export async function startOverlay({ stage, bridge, say, switchModel, models, st
       return true;
     }
     if (c.kind === 'stop' || c.kind === 'status') { // asides: only mean something while a job is running
+      if (c.kind === 'stop') { const e = await api('/api/eyes', { op: 'stop' }); if (e.stopped) { say('Stopped', 'info'); return true; } }
       if (!running.length) return false;
       if (c.kind === 'stop') { cancelClaude(); return true; }
       const j = running[0];
@@ -230,6 +233,20 @@ export async function startOverlay({ stage, bridge, say, switchModel, models, st
     if (c.kind === 'security-set') { await api('/api/security', { preset: c.preset }); say(`Security preset: ${c.preset}${c.preset === 'blackwall' ? ' (everything on except paying, which still asks)' : ''}`, 'info'); return true; }
     if (c.kind === 'security-switch') { const r = await api('/api/security', { switch: c.index, on: c.on }); say(r.error ? r.error : `Security is now ${r.preset}`, 'info'); return true; }
     if (c.kind === 'care') { care.off(!c.on); try { localStorage.setItem('mili.care', c.on ? '1' : '0'); } catch { /* not remembered */ } say(`Care nudges ${c.on ? 'on' : 'off'}`, 'info'); return true; }
+    if (c.kind === 'look') { say('Looking...', 'info'); const r = await api('/api/eyes', { op: 'look' }); say(r.msg ?? r.error, 'info'); return true; }
+    if (c.kind === 'watch') { const r = await api('/api/eyes', { op: 'watch', condition: c.condition }); say(r.msg ?? r.error, 'info'); return true; }
+    if (c.kind === 'along') { const r = await api('/api/eyes', { op: 'along' }); say(r.msg ?? r.error, 'info'); return true; }
+    if (c.kind === 'watch-stop') { const r = await api('/api/eyes', { op: 'stop' }); say(r.stopped ? 'I stopped watching' : 'I was not watching anything', 'info'); return true; }
+    if (c.kind === 'gui') {
+      if (paysWords(c.task)) { payAsk = () => guiStart(c.task); ask(`This sounds like it involves paying: "${c.task.slice(0, 80)}". Allow it? (yes / no)`); return true; }
+      await guiStart(c.task); return true;
+    }
+    if (c.kind === 'find') {
+      found = (await api('/api/eyes', { op: 'find', words: c.words })).files ?? [];
+      say(found.length ? found.map((f, i) => `${i + 1}. ${f}`).join(' | ') + ' | Say "open result N" to open one.' : `I found no file matching "${c.words}".`, 'info');
+      return true;
+    }
+    if (c.kind === 'open-result') { if (!found[c.n - 1]) { say('Nothing to open, search first.', 'info'); return true; } await pcDo({ action: 'open', target: found[c.n - 1] }); return true; }
     if (c.kind === 'pc') { await pcDo(c.body); return true; }
     return false;
   };
@@ -259,7 +276,13 @@ export async function startOverlay({ stage, bridge, say, switchModel, models, st
   const told = new Set();
   let first = true;
   setInterval(async () => { // other sessions can make her speak: POST /api/say {"text": ...}
-    for (const t of await fetch('/api/inbox').then((x) => x.json()).catch(() => [])) { say(`Message: ${t}`, 'info'); sendText(`[Message from another Claude Code session] Tell me in one or two short Japanese sentences: ${t}`); }
+    for (const it of await fetch('/api/inbox').then((x) => x.json()).catch(() => [])) {
+      const t = it.text ?? it, kind = it.kind;
+      if (kind === 'ask') { guiAsk = true; say(t, 'info'); continue; }
+      const label = { reminder: 'Reminder', lookout: 'Screen', along: 'Screen', gui: 'Screen task' }[kind];
+      say(label ? `${label}: ${t}` : `Message: ${t}`, 'info');
+      sendText(label ? `[${label}] Tell me in one or two short Japanese sentences: ${t}` : `[Message from another Claude Code session] Tell me in one or two short Japanese sentences: ${t}`);
+    }
   }, 2000);
   setInterval(async () => {
     const jobs = await fetch('/api/claude').then((x) => x.json()).catch(() => null);

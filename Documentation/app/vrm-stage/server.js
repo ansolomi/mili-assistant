@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { makeLearner } from './learn.js';
 import { makeClaude } from './claude.js';
 import { makePc, PRESETS } from './pc.js';
+import { makeEyes } from './eyes.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dist = path.join(here, 'dist');
@@ -20,7 +21,9 @@ setInterval(() => learner.run(), 3_600_000);
 const vault = process.env.MILI_VAULT ?? "D:\\Projects\\Alvin's Vault";
 const claude = makeClaude({ cwd: vault, addDir: path.dirname(vault), notes: path.join(vault, 'Mili jobs'), sessionFile: path.join(data, 'claude-session.json'), cloudFile: path.join(data, 'cloud-session.json') });
 const inbox = []; // things other sessions asked her to say; the overlay drains it
-const pc = makePc(data, (t) => inbox.push(t));
+const say = (text, kind) => inbox.push(kind ? { text, kind } : text); // kind tells the overlay how to voice it
+const pc = makePc(data, say);
+const eyes = makeEyes({ say, pc, dataDir: data });
 const settingsFile = path.join(data, 'stage-settings.json');
 
 const listDir = (sub, exts) => (fs.existsSync(path.join(data, sub)) ? fs.readdirSync(path.join(data, sub)).filter((f) => exts.includes(path.extname(f).toLowerCase())) : []);
@@ -117,6 +120,21 @@ http.createServer(async (req, res) => {
       else return json(res, { error: 'text+due, remove, or routine+steps' }, 400);
     }
     return json(res, pc.state());
+  }
+  if (p === '/api/eyes' && req.method === 'POST') { // {op: look|watch|along|stop|gui|answer|find|status, ...}
+    let b;
+    try { b = JSON.parse((await body(req)).toString() || '{}'); } catch { return json(res, { error: 'invalid JSON' }, 400); }
+    try {
+      if (b.op === 'look') return json(res, { ok: true, msg: await eyes.look(b.question) });
+      if (b.op === 'watch') return json(res, eyes.watch(String(b.condition ?? ''), !!b.repeat));
+      if (b.op === 'along') return json(res, eyes.watchAlong());
+      if (b.op === 'stop') return json(res, { stopped: eyes.cancel() });
+      if (b.op === 'gui') return json(res, await eyes.gui(String(b.task ?? '')));
+      if (b.op === 'answer') return json(res, { ok: eyes.guiAnswer(!!b.yes) });
+      if (b.op === 'find') return json(res, { files: eyes.find(String(b.words ?? '')) });
+      if (b.op === 'status') return json(res, eyes.status());
+    } catch (e) { return json(res, { ok: false, msg: e.message }); }
+    return json(res, { error: 'unknown op' }, 400);
   }
   if (p === '/api/inbox') return json(res, inbox.splice(0));
   if (p === '/api/claude/cancel' && req.method === 'POST') return json(res, { cancelled: claude.cancel(Number(url.searchParams.get('id')) || 0) });

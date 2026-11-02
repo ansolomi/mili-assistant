@@ -57,7 +57,7 @@ export function makePc(dataDir, say) {
   const key = (s) => String(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
   const setRoutine = (name, steps) => { store.routines = store.routines.filter((r) => key(r.name) !== key(name)); if (steps) store.routines.push({ name: key(name), steps: String(steps).slice(0, 600) }); save(); };
   const tick = () => {
-    for (const r of store.reminders) if (!r.said && r.due <= Date.now()) { r.said = true; say(`Reminder: ${r.text}${Date.now() - r.due > 120000 ? ' (it was due a while ago)' : ''}`); }
+    for (const r of store.reminders) if (!r.said && r.due <= Date.now()) { r.said = true; say(`${r.text}${Date.now() - r.due > 120000 ? ' (it was due a while ago)' : ''}`, 'reminder'); }
     if (store.reminders.some((r) => r.said)) { store.reminders = store.reminders.filter((r) => !r.said || Date.now() - r.due < 60000); save(); }
   };
   setInterval(tick, 10000);
@@ -107,18 +107,18 @@ export function makePc(dataDir, say) {
   const switchOf = (a) => ({ open: OPEN, media: MEDIA, volume: MEDIA, shortcut: KEYS, window: WINDOWS, power: POWER })[a.action];
   const describe = (a) => ({ open: `open ${a.target}`, media: `${a.what} the media`, volume: 'change the volume', shortcut: `press ${a.name}`, window: `${a.what ?? 'switch to'} ${a.title}`, power: `${a.what} the PC` })[a.action] ?? a.action;
 
-  // Gated entry point: do it, or return a question that /api/pc/confirm answers.
+  // Run fn if switch `sw` is on (and `always` is false), else return a question that /api/pc/confirm answers.
+  async function gate(sw, question, fn, always = false) {
+    if (sec.on[sw] && !always) return fn();
+    const id = ++askId;
+    asks.set(id, fn);
+    setTimeout(() => asks.delete(id), 120000);
+    return { ask: question, id };
+  }
   async function act(a) {
     const sw = switchOf(a);
     if (sw === undefined) return { ok: false, msg: 'unknown action' };
-    const always = a.action === 'power' && (a.what === 'shutdown' || a.what === 'restart'); // these ask whatever the preset
-    if (!sec.on[sw] || always) {
-      const id = ++askId;
-      asks.set(id, () => doAction(a));
-      setTimeout(() => asks.delete(id), 120000);
-      return { ask: `Allow me to ${describe(a)}? (yes / no)`, id };
-    }
-    return doAction(a);
+    return gate(sw, `Allow me to ${describe(a)}? (yes / no)`, () => doAction(a), a.action === 'power' && (a.what === 'shutdown' || a.what === 'restart')); // these ask whatever the preset
   }
   async function confirm(id, yes) {
     const f = asks.get(id);
@@ -128,5 +128,5 @@ export function makePc(dataDir, say) {
   // The last unanswered question, for a bare "yes" or "no".
   const lastAsk = () => [...asks.keys()].pop() ?? 0;
 
-  return { security, setPreset, setSwitch, act, confirm, lastAsk, addReminder, removeReminder, setRoutine, state: () => ({ reminders: store.reminders.filter((r) => !r.said), routines: store.routines }) };
+  return { gate, security, setPreset, setSwitch, act, confirm, lastAsk, addReminder, removeReminder, setRoutine, state: () => ({ reminders: store.reminders.filter((r) => !r.said), routines: store.routines }) };
 }
