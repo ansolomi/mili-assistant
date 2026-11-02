@@ -2,32 +2,48 @@
 <meta charset="utf-8">
 <title>Mili</title>
 <style>
-  :root { color-scheme: dark; --bg: #1f2128; --card: #2b2e38; --line: #3a3e4b; --ink: #eceef4; --dim: #9aa0b1; --accent: #ff7fa8; }
+  :root { color-scheme: dark; --bg: #151826; --card: rgba(255,255,255,0.055); --line: rgba(255,255,255,0.09); --ink: #eef0f8; --dim: #8f97ad; --pink: #ff7fa8; --pink2: #ff5c8a; --lav: #9b8cff; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.4 "Segoe UI", system-ui, sans-serif; user-select: none; }
-  body { padding: 14px; border: 1px solid var(--line); height: 100vh; overflow: hidden; }
-  h1 { font-size: 15px; margin: 0 0 12px; display: flex; justify-content: space-between; align-items: center; }
-  h1 small { color: var(--dim); font-weight: 400; }
-  .row { background: var(--card); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
-  .row label { display: flex; justify-content: space-between; color: var(--dim); margin-bottom: 6px; }
-  input[type=range] { width: 100%; accent-color: var(--accent); }
-  button { width: 100%; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; margin-bottom: 8px; font: inherit; text-align: left; cursor: pointer; display: flex; justify-content: space-between; }
-  button:hover { border-color: var(--accent); }
-  button.on { background: #4a2a3a; border-color: var(--accent); }
-  button span { color: var(--dim); }
-  button.danger:hover { border-color: #ff6b6b; }
-  .hint { color: var(--dim); font-size: 11.5px; margin: 2px 2px 10px; }
+  html, body { margin: 0; color: var(--ink); font: 13px/1.4 "Segoe UI", system-ui, sans-serif; user-select: none; }
+  body { padding: 16px 14px 12px; height: 100vh; overflow: hidden; border: 1px solid var(--line); border-radius: 16px;
+    background: radial-gradient(120% 60% at 0% 0%, rgba(255,127,168,0.16), transparent 60%), radial-gradient(100% 50% at 100% 100%, rgba(155,140,255,0.14), transparent 60%), var(--bg); }
+  h1 { font-size: 16px; margin: 0 2px 14px; display: flex; align-items: center; gap: 9px; letter-spacing: .02em; }
+  h1::before { content: ""; width: 11px; height: 11px; border-radius: 50%; background: linear-gradient(135deg, var(--pink), var(--lav)); box-shadow: 0 0 10px var(--pink); }
+  h1 small { margin-left: auto; color: var(--dim); font-weight: 400; font-size: 11px; }
+  h2 { font-size: 10.5px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 14px 4px 6px; font-weight: 600; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 6px; }
+  .card label { display: flex; justify-content: space-between; color: var(--dim); margin-bottom: 6px; } .card label b { color: var(--ink); font-weight: 600; }
+  input[type=range] { width: 100%; accent-color: var(--pink); }
+  button { width: 100%; display: flex; align-items: center; gap: 8px; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; margin-bottom: 6px; font: inherit; text-align: left; cursor: pointer; transition: border-color .15s, background .15s, transform .08s; }
+  button:hover { border-color: rgba(255,127,168,0.6); background: rgba(255,127,168,0.08); } button:active { transform: scale(.985); }
+  button span { margin-left: auto; color: var(--dim); font-size: 11.5px; }
+  .sw { margin-left: auto; width: 32px; height: 18px; border-radius: 999px; background: rgba(255,255,255,0.14); position: relative; flex: none; transition: background .2s; }
+  .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .2s; }
+  button.on .sw { background: linear-gradient(135deg, var(--pink2), var(--lav)); } button.on .sw::after { transform: translateX(14px); }
+  button.on { border-color: rgba(255,127,168,0.45); }
+  button.danger:hover { border-color: #ff6b6b; background: rgba(255,107,107,0.08); }
+  .hint { color: var(--dim); font-size: 11.5px; margin: 8px 4px 0; line-height: 1.45; }
+  kbd { background: rgba(255,255,255,0.09); border-radius: 5px; padding: 0 5px; font: 11px "Cascadia Mono", Consolas, monospace; }
 </style>
-<h1>Mili <small>v1.3</small></h1>
+<h1>Mili <small id="ver">desktop companion</small></h1>
 
-<div class="row"><label><span>Size</span><b id="sizeV">100%</b></label><input id="size" type="range" min="50" max="160" step="5" value="100"></div>
+<div class="card"><label><span>Size</span><b id="sizeV">100%</b></label><input id="size" type="range" min="50" max="160" step="5" value="100"></div>
 
-<button id="mic">Talk to her <span id="micV">Ctrl+Alt+M</span></button>
-<button id="walk">Walk around <span id="walkV">on</span></button>
+<h2>Talk</h2>
+<button id="mic">Talk to her <span id="micV"><kbd>Ctrl+Alt+M</kbd></span></button>
+<button id="wake">Hey Milli (always listening)<i class="sw"></i></button>
+
+<h2>Behaviour</h2>
+<button id="walk">Walk around<i class="sw"></i></button>
+<button id="care">Care nudges<i class="sw"></i></button>
 <button id="hide">Hide her <span id="hideV"></span></button>
+
+<h2>Work</h2>
 <button id="learn">Explore my files now</button>
-<button id="claude">Stop Claude Code jobs <span id="claudeV">Ctrl+Alt+C</span></button>
-<p class="hint">Drag her to move her. Scroll over her to resize. Click her to type.</p>
+<button id="claude">Stop Claude Code jobs <span id="claudeV"><kbd>Ctrl+Alt+C</kbd></span></button>
+
+<p class="hint">Drag her to move her, scroll over her to resize, click her to type. Try <kbd>security</kbd>, <kbd>reminders</kbd> or <kbd>discord</kbd> in the chat.</p>
+<h2>Quit</h2>
 <button id="quit" class="danger">Quit (keep services running)</button>
 <button id="stop" class="danger">Quit and stop all services</button>
 
@@ -35,9 +51,11 @@
   const $ = (id) => document.getElementById(id);
   const render = (s) => {
     $('size').value = Math.round(s.scale * 100); $('sizeV').textContent = Math.round(s.scale * 100) + '%';
-    $('walkV').textContent = s.walk ? 'on' : 'off'; $('walk').classList.toggle('on', s.walk);
-    $('mic').classList.toggle('on', s.mic); $('micV').textContent = s.mic ? 'Listening... click to send' : 'Ctrl+Alt+M';
-    $('claudeV').textContent = s.claude ? s.claude + ' running' : 'Ctrl+Alt+C'; $('claude').classList.toggle('on', s.claude > 0);
+    $('walk').classList.toggle('on', s.walk);
+    $('wake').classList.toggle('on', !!s.wake);
+    $('care').classList.toggle('on', s.care !== false);
+    $('mic').classList.toggle('on', s.mic); $('micV').innerHTML = s.mic ? 'Listening... click to send' : '<kbd>Ctrl+Alt+M</kbd>';
+    $('claudeV').innerHTML = s.claude ? s.claude + ' running' : '<kbd>Ctrl+Alt+C</kbd>'; $('claude').classList.toggle('on', s.claude > 0);
     $('hide').firstChild.textContent = s.hidden ? 'Show her ' : 'Hide her ';
   };
   panel.state().then(render);
@@ -45,5 +63,5 @@
   let t = 0;
   $('size').oninput = (e) => { $('sizeV').textContent = e.target.value + '%'; if (Date.now() - t > 60) { t = Date.now(); panel.cmd('scale', e.target.value / 100); } };
   $('size').onchange = (e) => panel.cmd('scale', e.target.value / 100);
-  for (const k of ['mic', 'walk', 'hide', 'learn', 'claude', 'quit', 'stop']) $(k).onclick = () => panel.cmd(k);
+  for (const k of ['mic', 'wake', 'walk', 'care', 'hide', 'learn', 'claude', 'quit', 'stop']) $(k).onclick = () => panel.cmd(k);
 </script>

@@ -86,6 +86,8 @@ About a minute after start, then hourly, she reads text files in the folders lis
 - **Asides while a Claude job runs:** `stop`, `status`, or `actually ...` to change the task.
 - **Care nudges:** eyes, stretch, water, late-night and meal reminders while you are at the PC; `care off` / `care on`.
 - **Files and screen:** `find <words>` then `open result N`; `what do you see`; `watch for <something>`; `watch along`; `stop watching`; `screen, <task>` lets her click and type through the local vision model (Ctrl+Alt+C stops her). Screenshots go only to the local Ollama model.
+- **Wake word:** say `Hey Milli` then your sentence (or `Hey Milli`, wait for "Yes?", then speak). The mic is cut into phrases and transcribed by the local speech model; anything that does not start with the wake phrase is thrown away and never reaches her brain. Toggle with `wake on` / `wake off` or the tray panel. The ring on the mic button shows it is listening.
+- **Discord presence:** make an application at discord.com/developers/applications, copy its Application ID, then type `discord id <number>`. Her status then shows what she is doing. `discord off` turns it off.
 - Restart Mili after updating so the stage server picks this up. State is in `Documentation/data/security.json` and `reminders.json` (git-ignored).
 
 ## Settings you may want to change

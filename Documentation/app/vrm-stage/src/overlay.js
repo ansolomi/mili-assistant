@@ -1,6 +1,7 @@
 // Desktop overlay mode (?overlay=1 inside the Electron window): transparent stage that lives on the desktop.
 // She walks along the taskbar, looks around, greets the cursor, perches on the taskbar edge or on the top edge of
 // the foreground window (VRMA clips), reacts to clicks with a chat box, and shows what the file explorer is reading.
+import { wakeText, wav, listen } from './wake.js';
 import { makeCare, LINES } from './care.js';
 import { parse, parseWhen, paysWords, amendment } from './commands.js';
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -47,7 +48,34 @@ export async function startOverlay({ stage, bridge, say, switchModel, models, st
   const pick = document.getElementById('ovModel');
   pick.replaceChildren(...models.map((m) => new Option(m.replace(/\.vrm$/, ''), m)));
   pick.onchange = () => switchModel(pick.value).catch((e) => say(`Model failed: ${e.message}`, 'info')).finally(() => box.focus());
+  // Her messages (info lines, answers to commands, questions) also show in the pane, or as a toast while it is closed.
+  const ovLog = document.getElementById('ovLog'), toast = document.getElementById('ovToast');
+  let toastTimer = 0;
+  new MutationObserver((muts) => {
+    for (const mu of muts) for (const n of mu.addedNodes) {
+      if (!(n instanceof HTMLElement) || !n.classList.contains('msg')) continue;
+      const isAsk = /\(yes \/ no\)/.test(n.textContent);
+      const c = n.cloneNode(true);
+      if (isAsk) {
+        c.classList.add('ask');
+        const yn = document.createElement('div'); yn.className = 'yn';
+        for (const [label, word] of [['Yes', 'yes'], ['No', 'no']]) { const b = document.createElement('button'); b.textContent = label; b.onclick = () => { yn.remove(); say(word, 'me'); bridge.sendText(word); }; yn.append(b); }
+        c.append(yn);
+      }
+      ovLog.append(c);
+      while (ovLog.childElementCount > 40) ovLog.firstChild.remove();
+      ovLog.scrollTop = ovLog.scrollHeight;
+      if (!st.chat && !n.classList.contains('me')) { // pane closed: a short toast instead
+        toast.textContent = n.textContent.replace(/\s*\(yes \/ no\)/, '').slice(0, 220);
+        toast.className = isAsk ? 'ask' : '';
+        if (isAsk) { const h = document.createElement('small'); h.textContent = 'Click her and answer yes or no'; toast.append(h); }
+        toast.style.display = 'block';
+        clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.style.display = 'none'; }, isAsk ? 25000 : 7000);
+      }
+    }
+  }).observe(document.getElementById('log'), { childList: true });
   const setChat = (on) => {
+    if (on) { toast.style.display = 'none'; ovLog.scrollTop = ovLog.scrollHeight; }
     pick.value = state.model;
     st.chat = on; st.lastActive = performance.now();
     pane.style.display = on ? 'flex' : 'none';
@@ -232,7 +260,14 @@ export async function startOverlay({ stage, bridge, say, switchModel, models, st
     if (c.kind === 'security') { const r = await api('/api/security'); say(`Security: ${r.preset}. On: ${r.switches.filter((x) => x.on).map((x) => x.name).join(', ') || 'nothing'}. Paying always asks.`, 'info'); return true; }
     if (c.kind === 'security-set') { await api('/api/security', { preset: c.preset }); say(`Security preset: ${c.preset}${c.preset === 'blackwall' ? ' (everything on except paying, which still asks)' : ''}`, 'info'); return true; }
     if (c.kind === 'security-switch') { const r = await api('/api/security', { switch: c.index, on: c.on }); say(r.error ? r.error : `Security is now ${r.preset}`, 'info'); return true; }
-    if (c.kind === 'care') { care.off(!c.on); try { localStorage.setItem('mili.care', c.on ? '1' : '0'); } catch { /* not remembered */ } say(`Care nudges ${c.on ? 'on' : 'off'}`, 'info'); return true; }
+    if (c.kind === 'wake') { try { localStorage.setItem('mili.wake', c.on ? '1' : '0'); } catch { /* not remembered */ } await setWake(c.on); say(wakeOn ? 'Listening for "Hey Milli"' : 'Wake word off', 'info'); return true; }
+    if (c.kind === 'discord') {
+      const r = await api('/api/discord', c.op === 'id' ? { clientId: c.id } : c.op ? { on: c.op === 'on' } : undefined);
+      say(r.error ?? (!r.configured ? 'Discord presence needs your own application ID: discord.com/developers/applications > New Application (name it Mili) > copy the Application ID, then type: discord id <number>'
+        : r.connected ? 'Discord presence is on' : `Discord presence ${r.on ? 'is set up but not connected' : 'is off'}${r.error ? `: ${r.error}` : ''}`), 'info');
+      return true;
+    }
+    if (c.kind === 'care') { care.off(!c.on); careOn = c.on; ov.report({ care: c.on }); try { localStorage.setItem('mili.care', c.on ? '1' : '0'); } catch { /* not remembered */ } say(`Care nudges ${c.on ? 'on' : 'off'}`, 'info'); return true; }
     if (c.kind === 'look') { say('Looking...', 'info'); const r = await api('/api/eyes', { op: 'look' }); say(r.msg ?? r.error, 'info'); return true; }
     if (c.kind === 'watch') { const r = await api('/api/eyes', { op: 'watch', condition: c.condition }); say(r.msg ?? r.error, 'info'); return true; }
     if (c.kind === 'along') { const r = await api('/api/eyes', { op: 'along' }); say(r.msg ?? r.error, 'info'); return true; }
@@ -251,8 +286,41 @@ export async function startOverlay({ stage, bridge, say, switchModel, models, st
     return false;
   };
   setInterval(async () => { const jobs = await api('/api/claude'); if (Array.isArray(jobs)) running = jobs.filter((j) => j.status === 'running'); }, 2000);
+  // ---- wake word: "Hey Milli" (see wake.js). Everything is transcribed locally and dropped unless it starts with the phrase. ----
+  let careOn = true, wakeOn = false, wakeMic = null, awake = 0, busyAsr = false;
+  const onUtterance = async (samples) => {
+    if (busyAsr || bridge.mic || bridge.playing || bridge.queue.length) return; // not while she talks or the mic button is in use
+    busyAsr = true;
+    try {
+      const r = await fetch('/api/asr', { method: 'POST', body: wav(samples) }).then((x) => x.json());
+      const text = r.text ?? '';
+      const rest = wakeText(text);
+      if (rest === null && Date.now() > awake) return; // not for her
+      awake = 0;
+      if (rest === null) { bridge.sendText(text); return; } // the sentence after a bare "Hey Milli"
+      if (!rest) { awake = Date.now() + 8000; ovMic.classList.add('on'); say('Yes? (listening)', 'info'); window.mili?.react(() => stage.playClip('wave_fast')); setTimeout(() => ovMic.classList.remove('on'), 8000); return; }
+      say(`You: ${rest}`, 'me');
+      bridge.sendText(rest);
+    } catch { /* speech model down: try the next phrase */ } finally { busyAsr = false; }
+  };
+  window.miliHear = onUtterance; // lets a test feed recorded speech through the wake path
+  const ovMic = document.getElementById('ovMic');
+  const setWake = async (on) => {
+    wakeMic?.stop(); wakeMic = null; wakeOn = false;
+    if (!on) { ovMic.classList.remove('wake'); return ov.report({ wake: false }); }
+    const sec = await api('/api/security');
+    if (!sec.switches?.[10]?.on) { say('The wake word switch is off (allow wake)', 'info'); return; }
+    try { wakeMic = await listen(onUtterance); wakeOn = true; ovMic.classList.add('wake'); } catch (e) { say(`Wake word: ${e.message}`, 'info'); }
+    ov.report({ wake: wakeOn });
+  };
+  ov.on('wake-toggle', () => handle(wakeOn ? 'wake off' : 'wake on'));
+  ov.on('care-toggle', () => handle(careOn ? 'care off' : 'care on'));
+  let wantWake = true;
+  try { wantWake = localStorage.getItem('mili.wake') !== '0'; } catch { /* default on */ }
+  setTimeout(() => wantWake && setWake(true), 4000);
+  setInterval(() => api('/api/discord', { state: running.length ? 'Working on a Claude Code job' : performance.now() - st.lastActive > st.napAfter ? 'Napping on a window ledge' : 'Hanging out on your desktop' }), 30000);
   const care = makeCare();
-  try { if (localStorage.getItem('mili.care') === '0') care.off(true); } catch { /* default on */ }
+  try { if (localStorage.getItem('mili.care') === '0') { care.off(true); careOn = false; ov.report({ care: false }); } } catch { /* default on */ }
   setInterval(() => { // 30 s tick; a nudge is shown and she says it in her own voice
     const kind = care.tick(performance.now() - st.lastActive);
     if (!kind) return;

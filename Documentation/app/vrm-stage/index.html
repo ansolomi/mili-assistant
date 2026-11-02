@@ -29,19 +29,41 @@
     html:has(body.overlay), body.overlay { background: transparent; }
     body.overlay aside, body.overlay .lil-gui, body.overlay #badge, body.overlay #audioHint { display: none; }
     body.overlay #app, body.overlay #stageWrap { height: 100vh; width: 100vw; aspect-ratio: auto; background: transparent; }
-    #ovMic { display: none; position: fixed; left: calc(50% + 110px); bottom: 330px; width: 38px; height: 38px; padding: 0; border-radius: 50%; border: 2px solid #fff; background: rgba(40,44,60,0.82); color: #fff; cursor: pointer; z-index: 8; }
+    /* ---- overlay: glass chat pane, toast, mic ---- */
+    body.overlay { --glass: rgba(20,23,36,0.86); --glass2: rgba(255,255,255,0.06); --pink: #ff7fa8; --pink2: #ff5c8a; --lav: #9b8cff; }
+    #ovMic { display: none; position: fixed; left: calc(50% + 110px); bottom: 330px; width: 40px; height: 40px; padding: 0; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.7); background: var(--glass); backdrop-filter: blur(10px); color: #fff; cursor: pointer; z-index: 8; transition: transform .15s, box-shadow .2s; }
+    #ovMic:hover { transform: scale(1.08); }
     #ovMic svg { width: 20px; height: 20px; fill: currentColor; display: block; margin: auto; }
-    #ovMic.on { background: #ff4d6d; animation: ovPulse 1s infinite; }
-    @keyframes ovPulse { 50% { box-shadow: 0 0 0 8px rgba(255,77,109,0.3); } }
+    #ovMic.wake { border-color: var(--pink); box-shadow: 0 0 0 3px rgba(255,127,168,0.25), 0 0 14px rgba(255,127,168,0.35); }
+    #ovMic.on { background: linear-gradient(135deg, var(--pink2), var(--lav)); animation: ovPulse 1s infinite; }
+    @keyframes ovPulse { 50% { box-shadow: 0 0 0 9px rgba(255,92,138,0.28); } }
     body.overlay #ovMic { display: block; }
-    #ovPane { display: none; position: fixed; top: 6px; left: 12px; right: 12px; z-index: 9; flex-direction: column; gap: 6px; padding: 10px; border-radius: 14px; background: rgba(24,28,40,0.92); border: 1px solid var(--line); box-shadow: 0 6px 24px rgba(0,0,0,0.45); }
-    #ovPane.drop { border-color: var(--accent); background: rgba(34,48,76,0.95); }
-    #ovChat { width: 100%; box-sizing: border-box; min-height: 110px; max-height: 40vh; resize: vertical; font: inherit; font-size: 15px; line-height: 1.4; padding: 8px 10px; }
+    #ovPane { display: none; position: fixed; top: 6px; left: 12px; right: 12px; z-index: 9; flex-direction: column; gap: 8px; padding: 12px; border-radius: 18px; background: var(--glass); backdrop-filter: blur(16px) saturate(1.3); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 34px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06); }
+    #ovPane.drop { border-color: var(--pink); background: rgba(46,32,58,0.94); }
+    #ovHead { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: .02em; }
+    #ovHead::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: linear-gradient(135deg, var(--pink), var(--lav)); box-shadow: 0 0 8px var(--pink); }
+    #ovHead small { margin-left: auto; font-weight: 400; color: var(--dim); font-size: 11px; }
+    #ovLog { display: flex; flex-direction: column; gap: 6px; max-height: 190px; overflow-y: auto; padding-right: 2px; scrollbar-width: thin; scrollbar-color: #3b4156 transparent; }
+    #ovLog:empty { display: none; }
+    #ovLog .msg { max-width: 88%; padding: 7px 11px; border-radius: 14px 14px 14px 4px; background: var(--glass2); border: 1px solid rgba(255,255,255,0.06); font-size: 13px; line-height: 1.35; }
+    #ovLog .msg.me { align-self: flex-end; border-radius: 14px 14px 4px 14px; background: linear-gradient(135deg, rgba(255,92,138,0.55), rgba(155,140,255,0.5)); border: none; }
+    #ovLog .msg.info { align-self: stretch; max-width: none; border-radius: 8px; background: rgba(155,140,255,0.08); border: none; border-left: 3px solid var(--lav); color: #b9bfd3; font-size: 12px; padding: 5px 9px; }
+    #ovLog .msg.ask { border-left-color: var(--pink); color: #ffd3e1; }
+    #ovLog .yn { display: flex; gap: 6px; margin-top: 5px; } #ovLog .yn button { padding: 3px 14px; border-radius: 999px; font-size: 12px; }
+    #ovChat { width: 100%; box-sizing: border-box; min-height: 84px; max-height: 40vh; resize: vertical; font: inherit; font-size: 14px; line-height: 1.45; padding: 10px 12px; background: rgba(8,10,18,0.55); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: var(--text); outline: none; transition: border-color .15s, box-shadow .15s; }
+    #ovChat:focus { border-color: var(--pink); box-shadow: 0 0 0 3px rgba(255,127,168,0.18); }
+    #ovChat::placeholder { color: #7d869c; }
     #ovFiles { display: flex; flex-wrap: wrap; gap: 6px; } #ovFiles:empty { display: none; }
-    #ovFiles span { background: #232c3d; border: 1px solid var(--line); border-radius: 999px; padding: 2px 6px 2px 10px; font-size: 12px; color: var(--text); }
+    #ovFiles span { background: rgba(155,140,255,0.16); border: 1px solid rgba(155,140,255,0.35); border-radius: 999px; padding: 2px 6px 2px 10px; font-size: 12px; color: var(--text); }
     #ovFiles b { cursor: pointer; margin-left: 6px; opacity: 0.7; }
-    #ovModel { background: #232c3d; color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px; font: inherit; }
-    #ovBar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #9aa7bd; } #ovBar i { flex: 1; font-style: normal; }
+    #ovModel { background: rgba(255,255,255,0.07); color: var(--text); border: 1px solid rgba(255,255,255,0.1); border-radius: 999px; padding: 6px 10px; font: inherit; font-size: 12px; max-width: 120px; }
+    #ovBar { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #8a93a9; } #ovBar i { flex: 1; font-style: normal; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    #ovPane button { border-radius: 999px; padding: 6px 14px; font-size: 12px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1); transition: background .15s, transform .1s; }
+    #ovPane button:hover { background: rgba(255,255,255,0.14); } #ovPane button:active { transform: scale(.96); }
+    #ovPane button.primary { background: linear-gradient(135deg, var(--pink2), var(--lav)); border: none; color: #fff; font-weight: 600; }
+    #ovToast { display: none; position: fixed; top: 10px; left: 14px; right: 14px; z-index: 9; padding: 9px 13px; border-radius: 14px; background: var(--glass); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.1); border-left: 4px solid var(--lav); box-shadow: 0 8px 26px rgba(0,0,0,0.45); font-size: 13px; line-height: 1.35; pointer-events: none; animation: ovIn .25s ease-out; }
+    #ovToast.ask { border-left-color: var(--pink); } #ovToast small { display: block; color: var(--pink); margin-top: 3px; }
+    @keyframes ovIn { from { opacity: 0; transform: translateY(-8px); } }
     body.clean aside, body.clean .lil-gui, body.clean #badge, body.clean #audioHint { display: none; }
   </style>
 </head>
@@ -61,10 +83,13 @@
     </aside>
   </div>
   <button id="ovMic" title="Talk (Ctrl+Alt+M)"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V22h2v-3.08A7 7 0 0 0 19 12z"/></svg></button>
+  <div id="ovToast"></div>
   <div id="ovPane">
+    <div id="ovHead">Mili<small id="ovTags"></small></div>
+    <div id="ovLog"></div>
     <div id="ovFiles"></div>
-    <textarea id="ovChat" placeholder="Say something... (Enter sends, Shift+Enter adds a line). Start with 'mili,' to give a task to Jarvis; drop or paste files for it." autocomplete="off"></textarea>
-    <div id="ovBar"><button id="ovAttach" title="Attach files for Jarvis">Attach</button><select id="ovModel" title="Which model she uses"></select><i>images, pdf, docx, txt, md, csv, json</i><button id="ovClose" title="Close (Esc)">Close</button><button id="ovSend" class="primary">Send</button></div>
+    <textarea id="ovChat" placeholder="Say something, or type a command. Enter sends, Shift+Enter adds a line. Start with 'mili,' for Jarvis; drop files here." autocomplete="off"></textarea>
+    <div id="ovBar"><button id="ovAttach" title="Attach files for Jarvis">Attach</button><select id="ovModel" title="Which model she uses"></select><i>say "hey milli", or type a command</i><button id="ovClose" title="Close (Esc)">Close</button><button id="ovSend" class="primary">Send</button></div>
     <input id="ovFile" type="file" multiple hidden />
   </div>
   <script type="module" src="/src/main.js"></script>

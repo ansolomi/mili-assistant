@@ -9,6 +9,7 @@ import { makeLearner } from './learn.js';
 import { makeClaude } from './claude.js';
 import { makePc, PRESETS } from './pc.js';
 import { makeEyes } from './eyes.js';
+import { makeDiscord } from './discord.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dist = path.join(here, 'dist');
@@ -23,6 +24,7 @@ const claude = makeClaude({ cwd: vault, addDir: path.dirname(vault), notes: path
 const inbox = []; // things other sessions asked her to say; the overlay drains it
 const say = (text, kind) => inbox.push(kind ? { text, kind } : text); // kind tells the overlay how to voice it
 const pc = makePc(data, say);
+const discord = makeDiscord(data);
 const eyes = makeEyes({ say, pc, dataDir: data });
 const settingsFile = path.join(data, 'stage-settings.json');
 
@@ -135,6 +137,25 @@ http.createServer(async (req, res) => {
       if (b.op === 'status') return json(res, eyes.status());
     } catch (e) { return json(res, { ok: false, msg: e.message }); }
     return json(res, { error: 'unknown op' }, 400);
+  }
+  if (p === '/api/asr' && req.method === 'POST') { // WAV in, text out, via the brain's local speech model (used by the wake word)
+    const buf = await body(req);
+    if (buf.length < 44 || buf.length > 2_000_000) return json(res, { error: 'wav up to 2 MB' }, 400);
+    try {
+      const fd = new FormData();
+      fd.append('file', new Blob([buf], { type: 'audio/wav' }), 'wake.wav');
+      const r = await fetch(process.env.BRAIN_URL ?? 'http://127.0.0.1:12393/asr', { method: 'POST', body: fd });
+      return json(res, await r.json(), r.status);
+    } catch (e) { return json(res, { error: `speech model not reachable: ${e.message}` }, 502); }
+  }
+  if (p === '/api/discord') { // GET status; POST {clientId?, on?} to configure or {state} to update the presence line
+    if (req.method === 'POST') {
+      let b;
+      try { b = JSON.parse((await body(req)).toString() || '{}'); } catch { return json(res, { error: 'invalid JSON' }, 400); }
+      if (b.state) discord.set(b.state);
+      else if (!discord.config(b)) return json(res, { error: 'the application ID is a 17 to 20 digit number' }, 400);
+    }
+    return json(res, discord.status());
   }
   if (p === '/api/inbox') return json(res, inbox.splice(0));
   if (p === '/api/claude/cancel' && req.method === 'POST') return json(res, { cancelled: claude.cancel(Number(url.searchParams.get('id')) || 0) });

@@ -47,6 +47,8 @@ export function parse(text, routines = []) {
   if ((m = /^(?:run|start|do)\s+(?:routine\s+)?(.+)$/i.exec(t)) && routines.some((r) => r.name === flat(m[1]))) return { kind: 'routine-run', name: flat(m[1]) };
   if (routines.some((r) => r.name === flat(t))) return { kind: 'routine-run', name: flat(t) };
   if ((m = /^(?:care|nudges?)\s+(on|off)$/i.exec(t))) return { kind: 'care', on: m[1].toLowerCase() === 'on' };
+  if ((m = /^(?:wake(?: word)?|hey milli)\s+(on|off)$/i.exec(t))) return { kind: 'wake', on: m[1].toLowerCase() === 'on' };
+  if ((m = /^discord(?:\s+(on|off|id\s+(\d{17,20})))?$/i.exec(t))) return { kind: 'discord', op: m[1]?.toLowerCase().split(' ')[0], id: m[2] };
   if (/^security$|^permissions$/i.test(t)) return { kind: 'security' };
   if ((m = /^(?:security|permissions?)\s+(lockdown|guarded|trusted|blackwall)$/i.exec(t)) || (m = /^(lockdown|blackwall) mode$/i.exec(t))) return { kind: 'security-set', preset: m[1].toLowerCase() };
   if ((m = /^(allow|don'?t allow|disallow)\s+(open|media|shortcuts?|windows?|power|mouse|sends?|extra|secrets?|wake)/i.exec(t))) {
@@ -114,6 +116,9 @@ if (typeof process !== 'undefined' && process.argv[1]?.endsWith('commands.js')) 
   assert.equal(parse('where is my cv file').words, 'cv');
   assert.equal(parse('open result 2').n, 2);
   assert.equal(parse('stop watching').kind, 'watch-stop');
+  assert.equal(parse('wake off').on, false);
+  assert.equal(parse('discord id 123456789012345678').id, '123456789012345678');
+  assert.equal(parse('discord').kind, 'discord');
   assert.equal(parse('how is the weather today'), null);
   assert.ok(paysWords('book a flight') && !paysWords('open a notebook'));
   console.log('commands ok');
