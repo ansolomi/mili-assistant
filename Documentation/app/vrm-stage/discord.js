@@ -18,7 +18,7 @@ export function makeDiscord(dataDir) {
   function connect(i = 0) {
     if (sock || !cfg.clientId || cfg.on === false) return;
     if (i > 9) { error = 'Discord is not running (no IPC pipe)'; return; }
-    const s = net.connect(`\\?\pipe\discord-ipc-${i}`);
+    const s = net.connect(String.raw`\\?\pipe\discord-ipc-` + i);
     s.on('connect', () => { sock = s; error = null; s.write(frame(0, { v: 1, client_id: cfg.clientId })); });
     s.on('data', (d) => {
       buf = Buffer.concat([buf, d]);
