@@ -1,6 +1,7 @@
 // Desktop overlay mode (?overlay=1 inside the Electron window): transparent stage that lives on the desktop.
 // She walks along the taskbar, looks around, greets the cursor, perches on the taskbar edge or on the top edge of
 // the foreground window (VRMA clips), reacts to clicks with a chat box, and shows what the file explorer is reading.
+import { makeCare, LINES } from './care.js';
 import { parse, parseWhen, paysWords, amendment } from './commands.js';
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const sleep = (s) => new Promise((ok) => setTimeout(ok, s * 1000));
@@ -228,10 +229,19 @@ export async function startOverlay({ stage, bridge, say, switchModel, models, st
     if (c.kind === 'security') { const r = await api('/api/security'); say(`Security: ${r.preset}. On: ${r.switches.filter((x) => x.on).map((x) => x.name).join(', ') || 'nothing'}. Paying always asks.`, 'info'); return true; }
     if (c.kind === 'security-set') { await api('/api/security', { preset: c.preset }); say(`Security preset: ${c.preset}${c.preset === 'blackwall' ? ' (everything on except paying, which still asks)' : ''}`, 'info'); return true; }
     if (c.kind === 'security-switch') { const r = await api('/api/security', { switch: c.index, on: c.on }); say(r.error ? r.error : `Security is now ${r.preset}`, 'info'); return true; }
+    if (c.kind === 'care') { care.off(!c.on); try { localStorage.setItem('mili.care', c.on ? '1' : '0'); } catch { /* not remembered */ } say(`Care nudges ${c.on ? 'on' : 'off'}`, 'info'); return true; }
     if (c.kind === 'pc') { await pcDo(c.body); return true; }
     return false;
   };
   setInterval(async () => { const jobs = await api('/api/claude'); if (Array.isArray(jobs)) running = jobs.filter((j) => j.status === 'running'); }, 2000);
+  const care = makeCare();
+  try { if (localStorage.getItem('mili.care') === '0') care.off(true); } catch { /* default on */ }
+  setInterval(() => { // 30 s tick; a nudge is shown and she says it in her own voice
+    const kind = care.tick(performance.now() - st.lastActive);
+    if (!kind) return;
+    say(`Care: ${LINES[kind]}`, 'info');
+    sendText(`[Care nudge] Gently tell me, in one short Japanese sentence, to ${LINES[kind]}.`);
+  }, 30000);
   const MODEL = /^\s*model\b[\s,、:：.。-]*(.*)$/is; // typed only: "model, arisa" swaps her look; "model" lists them
   bridge.sendText = (t) => { if (running.length && !payAsk && !pcAsk && amendment(t) && !CLOUD.test(t) && !JARVIS.test(t)) { const j = running[0]; cancelClaude(); runClaude(`${j.task}. Change of plan: ${t}`); return; } handle(t).then((done) => { if (!done) route(t); }); };
   const route = (t) => { const c = CLOUD.exec(t), j = JARVIS.exec(t), m = TYPED.exec(t), md = MODEL.exec(t); if (md) switchModel(md[1].trim()).catch((e) => say(`Model failed: ${e.message}`, 'info')); else if (c) runCloud(c[1]); else if (j) runJarvis(j[1]); else if (m) runClaude(m[1]); else sendText(t); };

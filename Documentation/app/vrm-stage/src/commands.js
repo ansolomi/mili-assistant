@@ -46,6 +46,7 @@ export function parse(text, routines = []) {
   const flat = (s) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
   if ((m = /^(?:run|start|do)\s+(?:routine\s+)?(.+)$/i.exec(t)) && routines.some((r) => r.name === flat(m[1]))) return { kind: 'routine-run', name: flat(m[1]) };
   if (routines.some((r) => r.name === flat(t))) return { kind: 'routine-run', name: flat(t) };
+  if ((m = /^(?:care|nudges?)\s+(on|off)$/i.exec(t))) return { kind: 'care', on: m[1].toLowerCase() === 'on' };
   if (/^security$|^permissions$/i.test(t)) return { kind: 'security' };
   if ((m = /^(?:security|permissions?)\s+(lockdown|guarded|trusted|blackwall)$/i.exec(t)) || (m = /^(lockdown|blackwall) mode$/i.exec(t))) return { kind: 'security-set', preset: m[1].toLowerCase() };
   if ((m = /^(allow|don'?t allow|disallow)\s+(open|media|shortcuts?|windows?|power|mouse|sends?|extra|secrets?|wake)/i.exec(t))) {
