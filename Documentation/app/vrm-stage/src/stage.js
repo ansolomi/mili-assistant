@@ -306,14 +306,33 @@ export class Stage {
   // Curl the fingers a little so hands do not stay in a stiff T-pose shape.
   relaxHands() {
     const h = this.vrm.humanoid;
+    this.fingers = [];
     for (const [side, sign] of [['left', -1], ['right', 1]]) {
-      for (const f of ['Index', 'Middle', 'Ring', 'Little']) {
+      ['Index', 'Middle', 'Ring', 'Little'].forEach((f, fi) => {
         for (const [seg, k] of [['Proximal', 0.35], ['Intermediate', 0.45], ['Distal', 0.3]]) {
           const n = h.getNormalizedBoneNode(`${side}${f}${seg}`);
-          if (n) n.rotation.z = sign * k;
+          if (n) { n.rotation.z = sign * k; this.fingers.push({ n, sign, k, fi, side }); }
         }
-      }
+      });
     }
+    this.handCurl = 1;
+  }
+
+  // Per-frame hand life: the curl follows the pose (open for a wave or stretch, closed when shy) and each finger and wrist drifts a little.
+  animateHands(t, dt, sp) {
+    if (!this.fingers?.length) return;
+    const fx = this.fx?.name, wave = this.pose === 'wave';
+    const open = wave ? 0.2 : fx === 'stretch' ? 0.1 : fx === 'shy' ? 1.5 : this.pose === 'handsFront' ? 1.2 : 1;
+    this.handCurl += (open - this.handCurl) * (1 - Math.exp(-dt * 5));
+    for (const { n, sign, k, fi, side } of this.fingers) {
+      const idle = Math.sin(t * 0.8 + fi * 0.7 + (side === 'left' ? 0 : 2)) * 0.1 + Math.sin(t * 7 + fi) * sp * 0.08;
+      const flutter = wave && side === 'right' ? Math.sin(t * 9 - fi * 0.6) * 0.12 : 0;
+      n.rotation.z = sign * Math.max(0, k * (this.handCurl + idle) + flutter);
+    }
+    const b = this.bones;
+    const sway = (side) => Math.sin(t * 0.7 + (side === 'left' ? 0 : 1.7));
+    if (b.leftHand) b.leftHand.rotation.set(sway('left') * 0.05 + sp * 0.12 * Math.sin(t * 4.2), 0, -0.06 * sway('left'));
+    if (b.rightHand) b.rightHand.rotation.set(sway('right') * 0.05 + sp * 0.12 * Math.sin(t * 4.6), 0, 0.06 * sway('right') + (wave ? Math.sin(t * 9 + 1) * 0.3 : 0));
   }
 
   // ---- VRMA animation clips (data/animations, see README) ---------------------------------
@@ -666,6 +685,7 @@ export class Stage {
         fxHead = [0.4 * e, Math.sin(t * 0.8) * 0.06 * e, Math.sin(t * 0.6) * 0.08 * e]; fxBlink = (0.65 + 0.15 * Math.sin(t * 1.3)) * e;
       }
     }
+    if (!this.action) this.animateHands(t, dt, sp);
     const earWag = fx?.name === 'earPerk' ? Math.sin(t * 34) * 0.16 * e : 0;
 
     // head follows the pointer a little, nods while talking
