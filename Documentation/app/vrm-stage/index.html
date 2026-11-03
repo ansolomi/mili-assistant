@@ -26,6 +26,14 @@
     button:hover { background: #2b364b; } button.on { background: #7f1d1d; border-color: #b91c1c; } button.primary { background: var(--accent); color: #07101f; border-color: var(--accent); font-weight: 600; }
     #btns { display: flex; gap: 8px; flex-wrap: wrap; }
     .lil-gui.root { position: fixed; top: 8px; left: 8px; z-index: 5; }
+    @media (max-width: 700px) { /* phone over Tailscale: her on top, chat underneath */
+      #app { height: 100dvh; flex-direction: column; }
+      #stageWrap { width: 100%; height: auto; flex: 1 1 0; min-height: 0; aspect-ratio: auto; }
+      aside { width: 100%; height: 42dvh; border-left: 0; border-top: 1px solid var(--line); }
+      #log { padding: 10px; } #controls { padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); }
+      input[type=text] { font-size: 16px; } /* no zoom-on-focus on iOS */
+      .lil-gui.root, #rec { display: none; }
+    }
     html:has(body.overlay), body.overlay { background: transparent; }
     body.overlay aside, body.overlay .lil-gui, body.overlay #badge, body.overlay #audioHint { display: none; }
     body.overlay #app, body.overlay #stageWrap { height: 100vh; width: 100vw; aspect-ratio: auto; background: transparent; }

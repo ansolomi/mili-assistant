@@ -27,7 +27,8 @@ function say(text, cls = '') {
 }
 
 // ---- bridge to the Open-LLM-VTuber server ---------------------------------------
-const wsUrl = params.get('ws') ?? saved.wsUrl ?? 'ws://localhost:12393/client-ws';
+const phone = !/^(localhost|127\.0\.0\.1)$/.test(location.hostname); // opened over Tailscale: chat through the server's websocket tunnel
+const wsUrl = phone ? `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/client-ws` : params.get('ws') ?? saved.wsUrl ?? 'ws://localhost:12393/client-ws';
 const bridge = new Bridge(wsUrl, {
   onStatus: (s) => { $('badge').textContent = s; $('badge').className = s === 'connected' ? 'ok' : 'bad'; },
   onSubtitle: (t) => (stage.subtitle = t),

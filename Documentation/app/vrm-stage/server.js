@@ -10,6 +10,8 @@ import { makeClaude } from './claude.js';
 import { makePc, PRESETS } from './pc.js';
 import { makeEyes } from './eyes.js';
 import { makeDiscord } from './discord.js';
+import { makeRemote, isLocal } from './remote.js';
+import net from 'node:net';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dist = path.join(here, 'dist');
@@ -38,12 +40,16 @@ function serveFile(res, file) {
   fs.createReadStream(file).pipe(res);
 }
 
-http.createServer(async (req, res) => {
+const remote = makeRemote(data, port);
+const handle = async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = decodeURIComponent(url.pathname);
   // /api/claude runs with full permissions: refuse requests from other websites and rebinding hosts.
   const self = [`localhost:${port}`, `127.0.0.1:${port}`];
-  if (!self.includes(req.headers.host) || (req.headers.origin && !self.some((s) => req.headers.origin === `http://${s}`))) { res.writeHead(403); return res.end('forbidden'); }
+  if (!isLocal(req)) { // a phone over Tailscale: token plus a short allowlist (remote.js)
+    const r = remote.gate(req, url, p);
+    if (r) { res.writeHead(r.code, r.headers); return res.end(r.text ?? ''); }
+  } else if (!self.includes(req.headers.host) || (req.headers.origin && !self.some((s) => req.headers.origin === `http://${s}`))) { res.writeHead(403); return res.end('forbidden'); }
   if (p === '/api/models') return json(res, listDir('models', ['.vrm']));
   if (p === '/api/animations') return json(res, listDir('animations', ['.vrma']).map((f) => f.slice(0, -5)));
   if (p === '/api/backgrounds') return json(res, listDir('backgrounds', ['.png', '.jpg', '.jpeg', '.webp']));
@@ -181,4 +187,18 @@ http.createServer(async (req, res) => {
   }
   const f = path.resolve(dist, '.' + (p === '/' ? '/index.html' : p));
   return f.startsWith(dist) ? serveFile(res, f) : (res.writeHead(403), res.end());
-}).listen(port, '127.0.0.1', () => console.log(`VRM stage on http://localhost:${port}`));
+};
+// Phone chat: tunnel the brain's websocket for authenticated remote requests only (the brain itself stays on localhost).
+const upgrade = (req, sock, head) => {
+  if (isLocal(req) || !remote.authed(req) || new URL(req.url, 'http://x').pathname !== '/client-ws') return sock.destroy();
+  const up = net.connect(Number(process.env.BRAIN_PORT ?? 12393), '127.0.0.1', () => {
+    const h = Object.entries(req.headers).filter(([k]) => /^(upgrade|connection|sec-websocket-)/.test(k)).map(([k, v]) => `${k}: ${v}`);
+    up.write(`GET /client-ws HTTP/1.1\r\nHost: 127.0.0.1\r\n${h.join('\r\n')}\r\n\r\n`);
+    if (head.length) up.write(head);
+    sock.pipe(up); up.pipe(sock);
+  });
+  up.on('error', () => sock.destroy()); sock.on('error', () => up.destroy());
+};
+const listen = (host, msg) => { const s = http.createServer(handle); s.on('upgrade', upgrade); s.listen(port, host, () => console.log(msg)); return s; };
+listen('127.0.0.1', `VRM stage on http://localhost:${port}`);
+if (remote.ip) listen(remote.ip, `Phone link: http://${remote.ip}:${port}/?t=<token in data/remote.json>`); // Tailscale address only, never 0.0.0.0
